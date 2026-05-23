@@ -33,7 +33,11 @@ src/
 │   ├── pathindex.test.ts
 │   ├── pathindex.bench.ts
 │   └── CLAUDE.md
-├── lineiter/             — line iterator with binary detection (TODO)
+├── lineiter/             — streaming line iterator with pluggable binary detection
+│   ├── lineiter.ts
+│   ├── lineiter.test.ts
+│   ├── lineiter.bench.ts
+│   └── CLAUDE.md
 └── tools/                — one file per tool (TODO)
 ```
 
@@ -45,8 +49,9 @@ src/
 - [x] **pathindex** — tree-structured file index. Async parallel walker with per-file stat, symlink
       detection, fuzzy search (fuzzysort, multi-word waterfall), glob filtering (picomatch, include/exclude).
       O(1) entry and directory lookup. See `src/pathindex/CLAUDE.md`.
-- [ ] **lineiter** — pull-style line iterator with binary detection (null-byte probe) and per-line byte cap.
-      Port from Go `fstoolset/lineiter`. Foundation for `fs-file-read`.
+- [x] **lineiter** — streaming line iterator with pluggable binary detection and per-line byte cap.
+      Consumes `AsyncIterable<Buffer>` (e.g. `createReadStream`). Port from Go `fstoolset/lineiter`.
+      Foundation for `fs-file-read`. See `src/lineiter/CLAUDE.md`.
 
 ### Phase 1: Session context + tool guard
 
