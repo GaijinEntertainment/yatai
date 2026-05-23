@@ -38,6 +38,10 @@ src/
 │   ├── lineiter.test.ts
 │   ├── lineiter.bench.ts
 │   └── CLAUDE.md
+├── git/                  — thin git CLI abstraction with diff annotation
+│   ├── git.ts
+│   ├── git.test.ts
+│   └── CLAUDE.md
 └── tools/                — one file per tool (TODO)
 ```
 
@@ -52,6 +56,9 @@ src/
 - [x] **lineiter** — streaming line iterator with pluggable binary detection and per-line byte cap.
       Consumes `AsyncIterable<Buffer>` (e.g. `createReadStream`). Port from Go `fstoolset/lineiter`.
       Foundation for `fs-file-read`. See `src/lineiter/CLAUDE.md`.
+- [x] **git** — thin git CLI abstraction. `Repo` class with `open`, `diffFile`, `changedFiles`, `log`.
+      Diff annotation utilities (`annotateDiff`, `parseHunkStart`, `countDiffLines`).
+      Port from Go `git/repo.go` + `gittoolset/annotate.go`. See `src/git/CLAUDE.md`.
 
 ### Phase 1: Session context + tool guard
 
