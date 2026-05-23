@@ -28,24 +28,14 @@ src/
 │   ├── llmxml.ts
 │   ├── llmxml.test.ts
 │   └── CLAUDE.md
-├── pathindex/            — tree-structured file index with fuzzy/glob search
-│   ├── pathindex.ts
-│   ├── pathindex.test.ts
-│   ├── pathindex.bench.ts
-│   └── CLAUDE.md
-├── lineiter/             — streaming line iterator with pluggable binary detection
-│   ├── lineiter.ts
-│   ├── lineiter.test.ts
-│   ├── lineiter.bench.ts
-│   └── CLAUDE.md
-├── git/                  — thin git CLI abstraction with diff annotation
-│   ├── git.ts
-│   ├── git.test.ts
-│   └── CLAUDE.md
-├── rg/                   — ripgrep CLI abstraction for content search
-│   ├── rg.ts
-│   ├── rg.test.ts
-│   └── CLAUDE.md
+├── repofs/               — scoped filesystem facade composing all sub-modules
+│   ├── repofs.ts
+│   ├── repofs.test.ts
+│   ├── CLAUDE.md
+│   ├── git/              — thin git CLI abstraction with diff annotation
+│   ├── rg/               — ripgrep CLI abstraction for content search
+│   ├── pathindex/        — tree-structured file index with fuzzy/glob search
+│   └── lineiter/         — streaming line iterator with pluggable binary detection
 └── tools/                — one file per tool (TODO)
 ```
 
@@ -66,6 +56,11 @@ src/
 - [x] **rg** — ripgrep CLI abstraction. `grep(root, pattern, options?, signal?)` with multi-target
       support (`string[]`), output truncation, and configurable directory exclusions.
       Port from Go `tools/v2/searchtoolset/grep.go`. See `src/rg/CLAUDE.md`.
+- [x] **repofs** — scoped filesystem facade. Composes PathIndex, Repo, and rg behind containment
+      layer (path escape prevention, symlink rejection). Provides `readFile` (lineiter-based with
+      binary detection, line windowing), `listDir` (index-based traversal with depth control),
+      `findFiles`/`globFiles` (pathindex delegation), `grep` (rg delegation), and read tracking
+      for future instruction resolution. See `src/repofs/CLAUDE.md`.
 
 ### Phase 1: Session context + tool guard
 
