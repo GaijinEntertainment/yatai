@@ -42,6 +42,10 @@ src/
 │   ├── git.ts
 │   ├── git.test.ts
 │   └── CLAUDE.md
+├── rg/                   — ripgrep CLI abstraction for content search
+│   ├── rg.ts
+│   ├── rg.test.ts
+│   └── CLAUDE.md
 └── tools/                — one file per tool (TODO)
 ```
 
@@ -59,6 +63,9 @@ src/
 - [x] **git** — thin git CLI abstraction. `Repo` class with `open`, `diffFile`, `changedFiles`, `log`.
       Diff annotation utilities (`annotateDiff`, `parseHunkStart`, `countDiffLines`).
       Port from Go `git/repo.go` + `gittoolset/annotate.go`. See `src/git/CLAUDE.md`.
+- [x] **rg** — ripgrep CLI abstraction. `grep(root, pattern, options?, signal?)` with multi-target
+      support (`string[]`), output truncation, and configurable directory exclusions.
+      Port from Go `tools/v2/searchtoolset/grep.go`. See `src/rg/CLAUDE.md`.
 
 ### Phase 1: Session context + tool guard
 
