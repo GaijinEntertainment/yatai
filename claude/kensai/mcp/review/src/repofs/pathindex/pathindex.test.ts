@@ -328,6 +328,43 @@ describe("PathIndex.new", () => {
 		expect(ix.get("nonexistent")).toBeUndefined();
 	});
 
+	it("counts lines in text files", async () => {
+		await writeFile(join(tempDir, "three.txt"), "one\ntwo\nthree\n");
+		await writeFile(join(tempDir, "no-trailing.txt"), "one\ntwo");
+		const ix = await PathIndex.new(tempDir);
+		const three = ix.get("three.txt") as IndexEntryFile;
+		const noTrailing = ix.get("no-trailing.txt") as IndexEntryFile;
+		expect(three.lineCount).toBe(3);
+		expect(three.isBinary).toBe(false);
+		expect(noTrailing.lineCount).toBe(2);
+		expect(noTrailing.isBinary).toBe(false);
+	});
+
+	it("tracks max line length", async () => {
+		await writeFile(join(tempDir, "varied.txt"), "short\na longer line here\nhi\n");
+		const ix = await PathIndex.new(tempDir);
+		const entry = ix.get("varied.txt") as IndexEntryFile;
+		expect(entry.maxLineLen).toBe(Buffer.byteLength("a longer line here"));
+	});
+
+	it("detects binary files", async () => {
+		await writeFile(join(tempDir, "binary.bin"), Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x00, 0x0a, 0x1a]));
+		const ix = await PathIndex.new(tempDir);
+		const entry = ix.get("binary.bin") as IndexEntryFile;
+		expect(entry.isBinary).toBe(true);
+		expect(entry.lineCount).toBe(0);
+		expect(entry.maxLineLen).toBe(0);
+	});
+
+	it("handles empty files", async () => {
+		await writeFile(join(tempDir, "empty.txt"), "");
+		const ix = await PathIndex.new(tempDir);
+		const entry = ix.get("empty.txt") as IndexEntryFile;
+		expect(entry.lineCount).toBe(0);
+		expect(entry.maxLineLen).toBe(0);
+		expect(entry.isBinary).toBe(false);
+	});
+
 	it("builds tree structure", async () => {
 		await createFiles(tempDir, ["src/a.go", "src/b.go", "lib/c.go"]);
 		const ix = await PathIndex.new(tempDir);
