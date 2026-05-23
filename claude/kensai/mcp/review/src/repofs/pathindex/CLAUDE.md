@@ -19,7 +19,7 @@ Replaces per-call filesystem operations for file lookup, directory listing, and 
 
 Discriminated union on `type`:
 
-- **`file`** — `name`, `size` (bytes)
+- **`file`** — `name`, `size` (bytes), `lineCount` (0 for binary), `maxLineLen` (longest line in bytes, 0 for binary/empty), `isBinary` (null byte in leading 512 bytes)
 - **`dir`** — `name`, `children: IndexEntry[]`
 - **`symlink`** — `name`, `target` (raw readlink), `targetType`, `size` (target's size if file)
 
@@ -47,10 +47,12 @@ Powered by `picomatch`. Pattern without `/` uses `matchBase` (matches basename a
 
 - Async recursive with parallel child dispatch (`Promise.all` per directory)
 - Symlinks indexed with target info but not followed for recursion
-- File sizes collected via `stat` per file
+- Per file: `stat` (size) and `LineIter` body-less scan (line count + binary detection) run in parallel
+- Binary detection via null byte probe on first 512 bytes — binary files get `lineCount: 0, isBinary: true`
 - Paths stored as forward-slash POSIX relative to root
 
 ## Dependencies
 
 - `fuzzysort` — SublimeText-style fuzzy scoring
 - `picomatch` — glob compilation and matching
+- `lineiter` — body-less line counting and binary detection during walk
