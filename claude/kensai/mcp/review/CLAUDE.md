@@ -7,8 +7,9 @@ Response format: LLMXML (pseudo-XML optimized for LLM consumption) — see `src/
 
 ## Architecture
 
-`session-start` performs heavy initialization: validates git, walks the file tree to build a path index, fetches
-deterministic data (commit message, diff, changed files). All subsequent tools operate within the session's project root.
+`session-start` performs heavy initialization: validates git, walks the file tree to build a path index (tree-structured
+with file sizes and symlink detection), fetches deterministic data (commit message, diff, changed files). All subsequent
+tools operate within the session's project root.
 
 Every tool has two layers:
 
@@ -23,58 +24,52 @@ active. Transparent to MCP tool listing — tools always appear, but calls fail 
 ```
 src/
 ├── index.ts              — server creation, tool registration, transport
-├── types.ts              — Phase, StartContext, Grounding, Finding, ReviewSession
-├── session.ts            — session state (get/set/requirePhase/sessionDict)
-├── result.ts             — textResult/errorResult response helpers
-├── llmxml/               — LLMXML markup builder (done)
+├── llmxml/               — pseudo-XML markup builder for LLM responses
 │   ├── llmxml.ts
-│   └── llmxml.test.ts
-├── pathindex/            — file tree walker + fuzzy search (TODO)
+│   ├── llmxml.test.ts
+│   └── CLAUDE.md
+├── pathindex/            — tree-structured file index with fuzzy/glob search
+│   ├── pathindex.ts
+│   ├── pathindex.test.ts
+│   ├── pathindex.bench.ts
+│   └── CLAUDE.md
 ├── lineiter/             — line iterator with binary detection (TODO)
-└── tools/                — one file per tool, each exports register(server)
-    ├── session-start.ts
-    ├── session-state.ts
-    ├── grounding-*.ts
-    ├── finding-*.ts
-    ├── surfacing-complete.ts
-    ├── proving-complete.ts
-    ├── review-complete.ts
-    ├── git-*.ts           (TODO)
-    ├── fs-*.ts            (TODO)
-    └── search-*.ts        (TODO)
+└── tools/                — one file per tool (TODO)
 ```
 
 ## Implementation Plan
 
 ### Phase 0: Infrastructure (pure library, no MCP)
 
-- [x] **llmxml** — markup builder (`src/llmxml/`)
-- [ ] **pathindex** — file tree walker + fuzzy search + glob/prefix filtering + directory children listing.
-      Port from Go `searchtoolset/pathindex`. Foundation for `search-find-files` and `fs-dir-list`.
+- [x] **llmxml** — pseudo-XML markup builder. Fluent element API, scalar attributes, one-shot content.
+- [x] **pathindex** — tree-structured file index. Async parallel walker with per-file stat, symlink
+      detection, fuzzy search (fuzzysort, multi-word waterfall), glob filtering (picomatch, include/exclude).
+      O(1) entry and directory lookup. See `src/pathindex/CLAUDE.md`.
 - [ ] **lineiter** — pull-style line iterator with binary detection (null-byte probe) and per-line byte cap.
       Port from Go `fstoolset/lineiter`. Foundation for `fs-file-read`.
 
 ### Phase 1: Session context + tool guard
 
-- [ ] **session rework** — `session-start` becomes heavy init: takes root + mode, validates git, walks tree → builds
+- [ ] **session rework** — `session-start` becomes heavy init: takes root + mode, validates git, builds
       pathindex, fetches commit message + diff + changed files. Stores all deterministic data.
 - [ ] **tool guard** — centralized wrapper that intercepts all MCP tool calls, checks for active session, returns
       standardized error if none. Transparent to MCP tool listing.
 
 ### Phase 2: Tools (programmatic core + MCP wrapper each)
 
-Session + git (start here):
+Session + git:
 
 - [ ] **session-start** — init pathindex, git context, deterministic data gathering
-- [ ] **session-state** — current phase, session info (exists, needs session binding)
+- [ ] **session-state** — current phase, session info
 - [ ] **git-diff** — diff for review mode, context lines param
 - [ ] **git-changed-files** — name-status list for review mode
 
 Filesystem + search:
 
-- [ ] **fs-file-read** — read file with line numbers, binary detection, line cap, path-miss suggestions from pathindex
-- [ ] **fs-dir-list** — directory listing via pathindex children
-- [ ] **search-find-files** — fuzzy file name search via pathindex (pattern, globs, prefixes, excludes, max results)
+- [ ] **fs-file-read** — read file with line numbers, binary detection, line cap, path-miss suggestions via
+      `fuzzySearch`
+- [ ] **fs-dir-list** — directory listing via pathindex tree (`dir()` -> render children with sizes)
+- [ ] **search-find-files** — file search via pathindex `globSearch`/`fuzzySearch`
 - [ ] **search-grep** — content search via ripgrep subprocess
 
 Remaining git:
@@ -91,19 +86,17 @@ Remaining git:
 Four phases, strictly ordered. Each phase has dedicated tools that only work during that phase.
 
 ```
-IDLE → GROUNDING → SURFACING → PROVING → FILING → COMPLETE
-                                   ↘ (0 findings) ↗
+IDLE -> GROUNDING -> SURFACING -> PROVING -> FILING -> COMPLETE
+                                    \- (0 findings) -/
 ```
 
 ## Conventions
 
 - Each tool lives in its own file under `tools/`, exporting a `register(server: McpServer)` function
 - Tool names are scoped: `session-*`, `grounding-*`, `finding-*`, `git-*`, `fs-*`, `search-*`
-- Tool responses use `textResult(data)` / `errorResult(message)` helpers from `result.ts` (JSON until LLMXML wired)
-- Session state is accessed via `getSession()` / `setSession()` — never import the variable directly
-- Phase gating uses `requirePhase(...phases)` — returns an error string or undefined
 - Infrastructure libraries (`pathindex`, `lineiter`, `llmxml`) are pure — no MCP dependency, independently testable
-- Use `vp check` for formatting + linting + type-checking, `vp test` for tests
+- Each module has its own `CLAUDE.md` documenting API and design
+- Use `vp check` for formatting + linting + type-checking, `vp test` for tests, `vp test bench` for benchmarks
 
 <!--VITE PLUS START-->
 
