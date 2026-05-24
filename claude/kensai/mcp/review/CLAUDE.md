@@ -44,10 +44,11 @@ src/
 └── toolsets/                 — one folder per toolset, one file per tool
     ├── types.ts              — ToolRegistrar, ToolContext, SessionDependant
     ├── result.ts             — ok(), err(), errFrom() response helpers
-    ├── session/              — session lifecycle + phase transitions (11 tools)
+    ├── session/              — session lifecycle + phase transitions (13 tools)
     │   ├── toolset.ts        — SessionToolset (binder, sync, lifecycle)
     │   ├── start.ts          — session_start
     │   ├── state.ts          — session_state
+    │   ├── priming.ts        — session_priming (multi-block context delivery)
     │   ├── end.ts            — session_end
     │   ├── observation_*.ts  — create, cancel
     │   ├── grounding_*.ts    — store, get, complete
@@ -94,16 +95,20 @@ Session:
 
 Filesystem:
 
-- [ ] **read_file** — read file with line numbers, binary detection, line cap
-- [ ] **list_dir** — directory listing via pathindex tree
-- [ ] **find_files** — file search via pathindex fuzzySearch/globSearch
-- [ ] **grep** — content search via ripgrep
+- [x] **read_file** — read file with line numbers, binary detection, line cap
+- [x] **list_dir** — directory listing via pathindex tree
+- [x] **find_files** — file search via pathindex fuzzySearch/globSearch
+- [x] **grep** — content search via ripgrep
 
 Git:
 
-- [ ] **diff_file** — annotated diff for a single file
-- [ ] **changed_files** — name-status list for review mode
-- [ ] **log** — commit history
+- [x] **diff_file** — annotated diff for a single file
+- [x] **changed_files** — name-status list for review mode
+- [x] **log** — commit history
+
+Context delivery:
+
+- [x] **session_priming** — multi-block priming (metadata, changed files, file stats, diffs)
 
 Findings:
 
@@ -123,9 +128,13 @@ Phase transitions:
 - [x] **proving_complete** — PROVING -> FILING
 - [x] **filing_complete** — FILING -> COMPLETE
 
-### Phase 3: Phase-gated tool visibility
+### Phase 3: Tool visibility and response formatting
 
-- [ ] Extend `#enabledTools()` to account for current phase — enable/disable tools per phase
+- [x] **Tool visibility** — only `session_start` visible before session; all tools enabled after start
+- [x] **Response formatting** — plain text for fs/git (Go conventions), LLMXML for session/findings/grounding
+- [x] **Soft errors** — not-found/binary/empty return `ok("[marker]")` with path suggestions, not `err()`
+- [x] **Extended descriptions** — each tool documents behaviour, alternatives, constraints (under 2KB cap)
+- [ ] Phase-gated tool visibility — enable/disable tools per current phase
 
 ## Review Modes
 

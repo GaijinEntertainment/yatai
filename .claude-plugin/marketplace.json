@@ -1,0 +1,28 @@
+{
+	"name": "yatai",
+	"owner": {
+		"name": "Gaijin Entertainment",
+		"email": "a.zinoviev@gaijin.team"
+	},
+	"metadata": {
+		"description": "Gaijin Entertainment Claude Code plugin marketplace",
+		"pluginRoot": "./claude"
+	},
+	"plugins": [
+		{
+			"name": "kensai",
+			"description": "Multi-agent code review pipeline with adversarial falsification, orchestrated by a stateful MCP server",
+			"source": "kensai",
+			"version": "0.1.0",
+			"license": "MIT",
+			"keywords": [
+				"code-review",
+				"multi-agent",
+				"review-pipeline",
+				"falsification",
+				"proving",
+				"mcp"
+			]
+		}
+	]
+}

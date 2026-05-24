@@ -1,9 +1,10 @@
 {
 	"name": "@gaijin/kensai-review-mcp",
-	"version": "0.0.0",
+	"version": "0.1.0",
 	"private": true,
 	"type": "module",
 	"scripts": {
+		"start": "node ./src/index.ts",
 		"test": "vp test",
 		"lint": "vp check",
 		"lint:fix": "vp check --fix",

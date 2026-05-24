@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "kensai": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/mcp/review/src/index.ts"],
+      "alwaysLoad": true
+    }
+  }
+}
