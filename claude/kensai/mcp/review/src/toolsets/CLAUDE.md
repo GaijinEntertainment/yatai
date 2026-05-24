@@ -16,17 +16,22 @@ lifecycle and dependencies.
 
 All tool handlers return `CallToolResult` via three helpers:
 
-| Helper           | Purpose                                            |
-| ---------------- | -------------------------------------------------- |
-| `ok(...texts)`   | Success response — one or more text content blocks |
-| `err(...texts)`  | Error response — sets `isError: true`              |
-| `errFrom(error)` | Error from caught exception — extracts `.message`  |
+| Helper                       | Purpose                                                     |
+| ---------------------------- | ----------------------------------------------------------- |
+| `ok(...texts)`               | Success response — one or more text content blocks          |
+| `err(...texts)`              | Error response — sets `isError: true`                       |
+| `errFrom(error)`             | Error from caught exception — extracts `.message`           |
+| `suggestPaths(rfs, query)`   | Fuzzy-search index for similar paths (top 3)                |
+| `formatSuggestions(matches)` | Format path suggestions as `\n\nDid you mean:\n\t...` block |
+
+**Error taxonomy:** `err()` for hard errors (tool broken, invalid phase). `ok("[marker]")` for soft errors
+(not found, binary, empty) — the tool worked, the resource doesn't exist.
 
 ## Toolsets
 
 | Toolset    | Folder      | Tools | Dependency            |
 | ---------- | ----------- | ----- | --------------------- |
-| Session    | `session/`  | 11    | None (always enabled) |
+| Session    | `session/`  | 13    | None (always enabled) |
 | Filesystem | `fs/`       | 4     | RepoFs                |
 | Git        | `git/`      | 3     | RepoFs                |
 | Findings   | `findings/` | 6     | Session state         |

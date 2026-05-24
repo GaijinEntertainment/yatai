@@ -4,6 +4,8 @@ import type { GitFileStat, GitLogEntry } from "../repofs/git/git.ts";
 import { RepoFs } from "../repofs/repofs.ts";
 import { FindingsStorage } from "./findings-storage.ts";
 import { GroundingStorage } from "./grounding-storage.ts";
+import type { Instruction } from "./instructions.ts";
+import { resolveInstructions } from "./instructions.ts";
 
 /** Review mode — determines which changes are under review. */
 export type ReviewMode = "committed" | "uncommitted" | "all";
@@ -54,6 +56,7 @@ export class Session {
 	readonly changedFiles: readonly GitFileStat[];
 	readonly manifest: readonly ManifestEntry[];
 	readonly diffs: readonly FileDiff[];
+	readonly instructions: readonly Instruction[];
 	#phase: SessionPhase = "GROUNDING";
 
 	get phase(): SessionPhase {
@@ -81,9 +84,18 @@ export class Session {
 
 		const manifest = buildManifest(rfs, changedFiles);
 		const reviewable = filterReviewableFiles(changedFiles);
-		const diffs = await fetchDiffs(rfs, base, head, reviewable);
+		const changedPaths = new Set(changedFiles.map((f) => f.path));
 
-		return new Session(root, mode, rfs, changedFiles, commit, manifest, diffs);
+		const [diffs, instructions] = await Promise.all([
+			fetchDiffs(rfs, base, head, reviewable),
+			resolveInstructions(
+				rfs,
+				changedFiles.map((f) => f.path),
+				changedPaths,
+			),
+		]);
+
+		return new Session(root, mode, rfs, changedFiles, commit, manifest, diffs, instructions);
 	}
 
 	private constructor(
@@ -94,6 +106,7 @@ export class Session {
 		commit: GitLogEntry | null,
 		manifest: ManifestEntry[],
 		diffs: FileDiff[],
+		instructions: Instruction[],
 	) {
 		this.id = generateId();
 		this.root = root;
@@ -106,6 +119,7 @@ export class Session {
 		this.commit = commit;
 		this.manifest = manifest;
 		this.diffs = diffs;
+		this.instructions = instructions;
 	}
 }
 

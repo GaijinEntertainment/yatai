@@ -34,6 +34,12 @@ All codebase access goes through `mcp__kensai__*` tools — no direct filesystem
 Batch independent tool calls in a single turn. Every tool call answers a specific question — can't state the question,
 skip the call.
 
+## Agent Instructions
+
+The priming context may include `<agent-instruction path="...">` blocks — project conventions discovered from
+CLAUDE.md/AGENTS.md files in the repository's directory chain. Apply these conventions when evaluating code under their
+scope. They define the project's coding standards and local conventions. Deeper (more specific) paths win on conflict.
+
 ## Terse Register
 
 Active throughout. Verbose thinking → context drift → degraded quality. Drop articles, filler, pleasantries, hedging.

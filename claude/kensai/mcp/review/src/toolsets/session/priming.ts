@@ -1,5 +1,6 @@
 import { element, attr } from "../../llmxml/llmxml.ts";
 import type { GitFileStat } from "../../repofs/git/git.ts";
+import { renderInstruction } from "../../session/instructions.ts";
 import type { FileDiff, ManifestEntry, Session } from "../../session/session.ts";
 import { resolveRefs } from "../../session/session.ts";
 import { ok, err } from "../result.ts";
@@ -22,6 +23,10 @@ function handle(ctx: PrimingContext) {
 	blocks.push(renderMetadata(s, base, headLabel));
 	blocks.push(renderChangedFiles(base, headLabel, s.changedFiles));
 	blocks.push(renderFileStats(s.manifest));
+
+	for (const inst of s.instructions) {
+		blocks.push(renderInstruction(inst));
+	}
 
 	for (const d of s.diffs) {
 		blocks.push(renderDiff(d, base, headLabel));
@@ -113,17 +118,18 @@ export function sessionPrimingTool(ctx: PrimingContext): ToolRegistrar {
 				"session_priming",
 				{
 					description: [
-						"Returns full review context as separate content blocks: metadata, changed files, file stats, and all diffs.",
+						"Returns full review context as separate content blocks.",
 						"",
 						"Behaviour:",
 						"  - Multi-block response. Each block is a separate content item.",
 						"  - Block 1: LLMXML <change> with commit metadata and refs.",
 						"  - Block 2: Plain text changed-files table (same format as changed_files tool).",
 						"  - Block 3: File shape metrics -- path, bytes, lines, max_line per file.",
-						'  - Block 4+: One per diff -- "Diff for path (base=X head=Y):" followed by annotated unified diff.',
+						"  - Block 4+: <agent-instruction> blocks -- project conventions (CLAUDE.md, AGENTS.md) from directory chains.",
+						"  - Remaining: One per diff -- annotated unified diff per changed file.",
 						"  - Large results (>500K chars) may be persisted to disk by the harness; agents can read individual diffs via diff_file.",
 						"",
-						"Use this tool at the start of grounding to receive all review context in one call.",
+						"Use this tool as the first call in any review phase to receive full context.",
 					].join("\n"),
 					annotations: { readOnlyHint: true },
 					_meta: { "anthropic/maxResultSizeChars": 500_000 },

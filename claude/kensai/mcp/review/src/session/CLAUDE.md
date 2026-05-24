@@ -1,35 +1,36 @@
 # session
 
-Stateful domain logic for a review session. Three classes: `Session` (fat factory + data holder),
-`FindingsStorage` (surfacing/proving lifecycle), `GroundingStorage` (observations + synthesized result).
-Toolsets are stateless facades over these.
+Stateful domain logic for a review session. `Session` (fat factory + data holder),
+`FindingsStorage` (surfacing/proving lifecycle), `GroundingStorage` (observations + synthesized result),
+`instructions` (project instruction file discovery). Toolsets are stateless facades over these.
 
 ## Session
 
 Fat `start()` factory — validates git, builds PathIndex, collects diffs and metadata in parallel.
 All data is lossless; tools perform lossy transformations (collapsing, capping, formatting).
 
-| Export                      | Purpose                                                                  |
-| --------------------------- | ------------------------------------------------------------------------ |
-| `Session.start(root, mode)` | Async factory — returns fully populated session                          |
-| `.id`                       | 40-char SHA1 hex, unique per session                                     |
-| `.root`                     | Absolute repo path                                                       |
-| `.mode`                     | `"committed" \| "uncommitted" \| "all"`                                  |
-| `.phase`                    | Current `SessionPhase` — starts at `GROUNDING`                           |
-| `.startedAt`                | Construction timestamp                                                   |
-| `.rfs`                      | `RepoFs` instance                                                        |
-| `.commit`                   | `GitLogEntry \| null` — HEAD commit; null for uncommitted mode           |
-| `.changedFiles`             | All changed files with status and +/- stats                              |
-| `.manifest`                 | Per-file shape metrics (bytes, lines, maxLineLen, binary) from PathIndex |
-| `.diffs`                    | Per-file unified diffs (3-line context) for reviewable files             |
-| `.findings`                 | `FindingsStorage` instance                                               |
-| `.grounding`                | `GroundingStorage` instance                                              |
-| `.advance(to)`              | Transition to the given phase — throws `SessionError` if invalid         |
-| `SessionPhase`              | `"GROUNDING" \| "SURFACING" \| "PROVING" \| "FILING" \| "COMPLETE"`      |
-| `ReviewMode`                | `"committed" \| "uncommitted" \| "all"`                                  |
-| `FileDiff`                  | `{ path, content }`                                                      |
-| `ManifestEntry`             | `{ path, bytes, lines, maxLineLen, binary }`                             |
-| `SessionError`              | Error class for session failures                                         |
+| Export                      | Purpose                                                                   |
+| --------------------------- | ------------------------------------------------------------------------- |
+| `Session.start(root, mode)` | Async factory — returns fully populated session                           |
+| `.id`                       | 40-char SHA1 hex, unique per session                                      |
+| `.root`                     | Absolute repo path                                                        |
+| `.mode`                     | `"committed" \| "uncommitted" \| "all"`                                   |
+| `.phase`                    | Current `SessionPhase` — starts at `GROUNDING`                            |
+| `.startedAt`                | Construction timestamp                                                    |
+| `.rfs`                      | `RepoFs` instance                                                         |
+| `.commit`                   | `GitLogEntry \| null` — HEAD commit; null for uncommitted mode            |
+| `.changedFiles`             | All changed files with status and +/- stats                               |
+| `.manifest`                 | Per-file shape metrics (bytes, lines, maxLineLen, binary) from PathIndex  |
+| `.diffs`                    | Per-file unified diffs (3-line context) for reviewable files              |
+| `.instructions`             | Discovered instruction files (CLAUDE.md, AGENTS.md) from directory chains |
+| `.findings`                 | `FindingsStorage` instance                                                |
+| `.grounding`                | `GroundingStorage` instance                                               |
+| `.advance(to)`              | Transition to the given phase — throws `SessionError` if invalid          |
+| `SessionPhase`              | `"GROUNDING" \| "SURFACING" \| "PROVING" \| "FILING" \| "COMPLETE"`       |
+| `ReviewMode`                | `"committed" \| "uncommitted" \| "all"`                                   |
+| `FileDiff`                  | `{ path, content }`                                                       |
+| `ManifestEntry`             | `{ path, bytes, lines, maxLineLen, binary }`                              |
+| `SessionError`              | Error class for session failures                                          |
 
 ### Phase state machine
 
@@ -120,8 +121,31 @@ Two-layer storage: incremental observations (O1, O2, ...) during exploration + o
 - `storeResult` throws if result already stored — no overwriting
 - Cancelled observations cannot be cancelled again
 
+## Instructions
+
+Project instruction file discovery. Walks directory chains of changed files, checks PathIndex for
+`CLAUDE.md`/`AGENTS.md`, reads content, excludes changed instruction files (already in diffs).
+
+| Export                                              | Purpose                                                   |
+| --------------------------------------------------- | --------------------------------------------------------- |
+| `resolveInstructions(rfs, filePaths, excludePaths)` | Discover and read instruction files from directory chains |
+| `renderInstruction(inst)`                           | Render as `<agent-instruction path="...">` LLMXML         |
+| `Instruction`                                       | `{ path, content }`                                       |
+
+Algorithm (ported from Go `internal/instructions`):
+
+1. For each changed file path, build directory chain root-first: `.`, `src`, `src/foo`
+2. At each directory, check for each instruction filename (`CLAUDE.md`, `AGENTS.md`)
+3. Deduplicate candidates across all file paths
+4. Skip files in `excludePaths` (changed instruction files already primed as diffs)
+5. Check existence via PathIndex (no filesystem probing)
+6. Read content via `RepoFs.readFile()`
+
+Resolved at `Session.start()` in parallel with diff fetching. Delivered as blocks in `session_priming`.
+
 ## Dependencies
 
 - `node:crypto` (Session ID generation)
 - `../repofs/repofs.ts` (RepoFs)
 - `../repofs/git/git.ts` (GitFileStat, GitLogEntry)
+- `./instructions.ts` (resolveInstructions)
