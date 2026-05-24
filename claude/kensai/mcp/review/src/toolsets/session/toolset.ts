@@ -9,6 +9,7 @@ import { groundingGetTool } from "./grounding_get.ts";
 import { groundingStoreTool } from "./grounding_store.ts";
 import { observationCancelTool } from "./observation_cancel.ts";
 import { observationCreateTool } from "./observation_create.ts";
+import { sessionPrimingTool } from "./priming.ts";
 import { provingCompleteTool } from "./proving_complete.ts";
 import { sessionStartTool } from "./start.ts";
 import { sessionStateTool } from "./state.ts";
@@ -35,7 +36,7 @@ export class SessionToolset {
 		return this.#session;
 	}
 
-	/** Register all tools (own + dependants) on the server. Dependant tools start disabled. */
+	/** Register all tools (own + dependants) on the server. Only session_start is enabled initially. */
 	bind(server: McpServer): void {
 		const ctx: ToolContext = {
 			session: () => this.#require(),
@@ -49,7 +50,9 @@ export class SessionToolset {
 		};
 
 		for (const reg of this.#ownTools(ctx, sessionCtx)) {
-			this.#handles.set(reg.name, reg.register(server));
+			const handle = reg.register(server);
+			if (reg.name !== "session_start") handle.disable();
+			this.#handles.set(reg.name, handle);
 			this.#ownToolNames.push(reg.name);
 		}
 
@@ -73,6 +76,9 @@ export class SessionToolset {
 				},
 			}),
 			sessionStateTool({
+				getSession: () => this.#session,
+			}),
+			sessionPrimingTool({
 				getSession: () => this.#session,
 			}),
 			sessionEndTool({
@@ -105,10 +111,10 @@ export class SessionToolset {
 	}
 
 	#enabledTools(): Set<string> {
+		if (!this.#session) return new Set(["session_start"]);
+
 		const names = new Set(this.#ownToolNames);
-		if (this.#session) {
-			for (const n of this.#depToolNames) names.add(n);
-		}
+		for (const n of this.#depToolNames) names.add(n);
 		return names;
 	}
 }
