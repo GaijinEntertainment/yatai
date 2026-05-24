@@ -53,7 +53,17 @@ export function sessionStateTool(ctx: StateContext): ToolRegistrar {
 		register(server) {
 			return server.registerTool(
 				"session_state",
-				{ description: "Returns the current session state.", annotations: { readOnlyHint: true } },
+				{
+					description: [
+						"Returns the current session state: phase, mode, refs, file counts, finding count.",
+						"",
+						"Behaviour:",
+						"  - Returns LLMXML <session> element with attributes and nested child elements.",
+						"  - Always available -- returns [no active session] soft error when no session exists.",
+						"  - Use to check current phase before calling phase-gated tools.",
+					].join("\n"),
+					annotations: { readOnlyHint: true },
+				},
 				() => handle(ctx),
 			);
 		},

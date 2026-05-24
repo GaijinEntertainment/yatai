@@ -37,7 +37,21 @@ export function logTool(ctx: ToolContext): ToolRegistrar {
 			return server.registerTool(
 				"log",
 				{
-					description: "List recent commits on HEAD as short-sha + subject lines.",
+					description: [
+						`List recent commits on HEAD as short-sha + subject lines. Use changed_files for what files a commit touched, diff_file for the diff body. Default count ${DEFAULT_COUNT}.`,
+						"",
+						"Reach for alternatives instead when:",
+						"  - You need the files a commit touched -> changed_files.",
+						"  - You need the actual diff body -> diff_file.",
+						"",
+						"Behaviour:",
+						`  - One line per commit: "- <short-sha> <subject>". Short SHA is ${SHORT_SHA} characters.`,
+						`  - count null or non-positive -> ${DEFAULT_COUNT}. Header reports total count.`,
+						"  - Trailing entries dropped with truncation marker when body exceeds render budget.",
+						"",
+						"Constraints:",
+						"  - HEAD only -- no branch/range/path args. Use diff_file with explicit context for comparisons.",
+					].join("\n"),
 					inputSchema,
 					annotations: { readOnlyHint: true },
 				},

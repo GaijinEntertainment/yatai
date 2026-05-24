@@ -161,7 +161,22 @@ export function readFileTool(ctx: ToolContext): ToolRegistrar {
 			return server.registerTool(
 				"read_file",
 				{
-					description: `Read a text file with line numbers. Use search tools to discover paths, list_dir for directories. Default ${DEFAULT_LINE_LIMIT} lines.`,
+					description: [
+						`Read a known text file by path. Use search tools to discover paths or match content, list_dir for directory listings. Default line limit ${DEFAULT_LINE_LIMIT}.`,
+						"",
+						"Reach for alternatives instead when:",
+						"  - You don't know the path -> use search tools (find_files, grep) to discover paths or match content.",
+						"  - You want a directory's entries -> list_dir.",
+						"",
+						"Behaviour:",
+						"  - Output is cat -n style: right-aligned line number, tab, line text. Cite by prefix number.",
+						`  - line_offset is 1-based; null reads from the start. Default line_limit is ${DEFAULT_LINE_LIMIT}.`,
+						"  - Empty files return [file exists, but is empty]. Past-EOF reads return [line_offset is past end of file].",
+						"",
+						"Constraints:",
+						"  - Binary files rejected: common extensions (.png, .pdf, .zip, ...) and null byte in first 512 bytes.",
+						`  - Lines exceeding ${LINE_LENGTH_CAP} characters are truncated with a [+N bytes truncated] suffix.`,
+					].join("\n"),
 					inputSchema,
 					annotations: { readOnlyHint: true },
 				},

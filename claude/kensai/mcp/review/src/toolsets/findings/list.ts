@@ -54,7 +54,16 @@ export function findingsListTool(ctx: ToolContext): ToolRegistrar {
 			return server.registerTool(
 				"findings_list",
 				{
-					description: "List all findings in the current review, with optional filtering.",
+					description: [
+						"List all findings in the current review, with optional dimension and status filtering.",
+						"",
+						"Behaviour:",
+						"  - Returns LLMXML <findings count=N> wrapping <finding> elements.",
+						"  - Each finding has id, kind (severity), status, dimension attributes and nested location/concern/evidence.",
+						"  - Filter by dimension (e.g. 'correctness') and/or status (pending/confirmed/rejected/cancelled).",
+						'  - Empty result -> "[no findings]".',
+						"  - Use during proving to get the list of findings awaiting verdict.",
+					].join("\n"),
 					inputSchema,
 					annotations: { readOnlyHint: true },
 				},

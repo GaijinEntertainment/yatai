@@ -50,7 +50,15 @@ export function findingGetTool(ctx: ToolContext): ToolRegistrar {
 			return server.registerTool(
 				"finding_get",
 				{
-					description: "Get a single finding by its ID.",
+					description: [
+						"Get a single finding by its ID. Returns full detail including verdict if proven.",
+						"",
+						"Behaviour:",
+						"  - Returns LLMXML <finding> element with id, kind, status, dimension attributes.",
+						"  - Nested elements: <location>, <concern>, <evidence>, and <verdict> (if proven).",
+						'  - Not found -> "[finding not found: F99]" soft error.',
+						"  - Use to inspect a specific finding's full evidence and verdict chain.",
+					].join("\n"),
 					inputSchema,
 					annotations: { readOnlyHint: true },
 				},

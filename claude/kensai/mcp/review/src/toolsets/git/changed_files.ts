@@ -90,8 +90,20 @@ export function changedFilesTool(ctx: ToolContext): ToolRegistrar {
 			return server.registerTool(
 				"changed_files",
 				{
-					description:
-						"List files changed in the review with status (A/M/D) and +/-. Use diff_file for one file's diff.",
+					description: [
+						"List files changed in the review with status (A/M/D) and +A/-D counts. Use diff_file for one file's diff, log for commit history.",
+						"",
+						"Reach for alternatives instead when:",
+						"  - You want one file's full diff -> diff_file.",
+						"  - You want recent commit history -> log.",
+						"",
+						"Behaviour:",
+						"  - Uses the session's review mode refs (committed: HEAD~1..HEAD, uncommitted: HEAD..worktree, all: HEAD~1..worktree).",
+						'  - Header line: "git diff base..head: N files changed". Then collapsed summaries, then per-file rows.',
+						'  - Per-file row: "<status>  <path>  +A/-D" where status is A (added), M (modified), or D (deleted).',
+						`  - Paths under ${COLLAPSED_PREFIXES.join(", ")} fold into "[collapsed] <prefix> (N files, +A/-D)" rows.`,
+						'  - Empty change set emits "[no files changed]".',
+					].join("\n"),
 					annotations: { readOnlyHint: true },
 				},
 				() => handle(ctx),

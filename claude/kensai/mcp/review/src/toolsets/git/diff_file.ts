@@ -42,8 +42,23 @@ export function diffFileTool(ctx: ToolContext): ToolRegistrar {
 			return server.registerTool(
 				"diff_file",
 				{
-					description:
-						"Show the annotated unified diff for one file in the review. Use changed_files to find paths first.",
+					description: [
+						"Show the line-annotated unified diff for one file in the review. Use changed_files to find paths first, log for commit history.",
+						"",
+						"Reach for alternatives instead when:",
+						"  - You don't know which files changed -> changed_files.",
+						"  - You want recent commit history -> log.",
+						"",
+						"Behaviour:",
+						"  - path is required and repository-relative. base/head derived from session review mode.",
+						'  - Each hunk line is prefixed with the new-file line number: "%4d + " for additions, "%4d   " for context,',
+						'    "   -   " for deletions. Cite these printed numbers when posting comments -- deletions have no number.',
+						"  - Plain text body. Header lists path/base/head before hunks.",
+						'  - Empty diff -> "[no changes]" with path/base/head header.',
+						"",
+						"Constraints:",
+						"  - Bad path -> soft error with fuzzy path suggestions.",
+					].join("\n"),
 					inputSchema,
 					annotations: { readOnlyHint: true },
 				},

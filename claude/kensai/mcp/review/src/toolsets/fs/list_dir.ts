@@ -95,7 +95,21 @@ export function listDirTool(ctx: ToolContext): ToolRegistrar {
 			return server.registerTool(
 				"list_dir",
 				{
-					description: "List directory entries with depth control. Use search tools for content, read_file for files.",
+					description: [
+						`List directory entries with depth control. Use search tools for content or file-name patterns, read_file to read a file. Default depth ${DEFAULT_MAX_DEPTH}; capped at ${DEFAULT_MAX_ENTRIES} entries.`,
+						"",
+						"Reach for alternatives instead when:",
+						"  - You want files matching a name or content pattern -> use grep or find_files.",
+						"  - You want to read a file's contents -> read_file.",
+						"",
+						"Behaviour:",
+						`  - Default max_depth is ${DEFAULT_MAX_DEPTH} (directory itself only). Pass max_depth N to descend N levels.`,
+						`  - Total entries capped at ${DEFAULT_MAX_ENTRIES}. Truncation marker names the cap that fired.`,
+						'  - Dotfiles shown by default; skip_dotfiles=true omits "."-prefixed entries.',
+						`  - Descent suppressed for: ${EXCLUDE_DIRS.join(", ")}. The entry itself is still listed.`,
+						'  - Output: one entry per line. Directories as "path/", files as "path (N bytes)". Sorted alphabetically.',
+						"  - Empty directory -> [directory is empty] marker, not a tool error.",
+					].join("\n"),
 					inputSchema,
 					annotations: { readOnlyHint: true },
 				},
