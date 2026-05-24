@@ -41,6 +41,12 @@ src/
 │   ├── rg/                   — ripgrep CLI abstraction for content search
 │   ├── pathindex/            — tree-structured file index with fuzzy/glob search
 │   └── lineiter/             — streaming line iterator with pluggable binary detection
+├── session/                  — domain logic: Session, FindingsStorage, GroundingStorage, instructions
+│   ├── CLAUDE.md
+│   ├── session.ts            — fat factory, phase state machine, data holder
+│   ├── findings-storage.ts   — finding lifecycle (surface -> verdict/cancel)
+│   ├── grounding-storage.ts  — observations + synthesized grounding result
+│   └── instructions.ts       — project instruction file discovery (CLAUDE.md, AGENTS.md)
 └── toolsets/                 — one folder per toolset, one file per tool
     ├── types.ts              — ToolRegistrar, ToolContext, SessionDependant
     ├── result.ts             — ok(), err(), errFrom() response helpers
