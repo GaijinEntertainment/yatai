@@ -1,18 +1,30 @@
-import type { ToolRegistrar } from "../types.ts";
+import { ok, err } from "../result.ts";
+import type { Session, ToolRegistrar } from "../types.ts";
 
-/** proving_complete tool — complete the proving phase. */
-export function provingCompleteTool(): ToolRegistrar {
-	const name = "proving_complete";
+interface ProvingCompleteContext {
+	getSession(): Session;
+}
 
+function handle(ctx: ProvingCompleteContext) {
+	const session = ctx.getSession();
+
+	if (session.phase !== "PROVING") return err(`Cannot complete proving: current phase is ${session.phase}.`);
+
+	const pending = session.findings.list({ status: "pending" }).length;
+	if (pending > 0) return err(`Cannot complete proving: ${pending} finding(s) still pending verdict.`);
+
+	session.advance("FILING");
+	return ok("Proving complete. Phase: FILING.");
+}
+
+export function provingCompleteTool(ctx: ProvingCompleteContext): ToolRegistrar {
 	return {
-		name,
+		name: "proving_complete",
 		register(server) {
 			return server.registerTool(
-				name,
+				"proving_complete",
 				{ description: "Complete the proving phase. Transitions from PROVING to FILING." },
-				async () => {
-					return { content: [{ type: "text", text: "[stub] proving_complete" }] };
-				},
+				() => handle(ctx),
 			);
 		},
 	};

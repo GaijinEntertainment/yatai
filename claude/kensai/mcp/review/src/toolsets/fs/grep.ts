@@ -1,36 +1,42 @@
 import { z } from "zod";
 
-import type { RepoFs } from "../../repofs/repofs.ts";
-import type { ToolRegistrar } from "../types.ts";
+import { errFrom, ok } from "../result.ts";
+import type { ToolContext, ToolRegistrar } from "../types.ts";
 
-/** Callbacks provided by FsToolset for grep. */
-export interface GrepContext {
-	rfs(): RepoFs;
+const inputSchema = z.object({
+	pattern: z.string().describe("Search pattern (regex)."),
+	include: z.string().optional().describe("Glob pattern to include files."),
+	exclude: z.string().optional().describe("Glob pattern to exclude files."),
+	limit: z.number().int().positive().optional().describe("Maximum matches. Defaults to 100."),
+});
+
+type Input = z.infer<typeof inputSchema>;
+
+async function handle(ctx: ToolContext, args: Input) {
+	try {
+		const result = await ctx.rfs().grep(args.pattern, {
+			glob: args.include,
+			maxResults: args.limit ?? 100,
+		});
+		if (result.lineCount === 0) return ok("No matches.");
+		return ok(result.output);
+	} catch (error) {
+		return errFrom(error);
+	}
 }
 
-/** grep tool — content search via ripgrep scoped to the repository. */
-export function grepTool(ctx: GrepContext): ToolRegistrar {
-	const name = "grep";
-
+export function grepTool(ctx: ToolContext): ToolRegistrar {
 	return {
-		name,
+		name: "grep",
 		register(server) {
 			return server.registerTool(
-				name,
+				"grep",
 				{
 					description: "Search file contents via ripgrep, scoped to the repository root.",
-					inputSchema: {
-						pattern: z.string().describe("Search pattern (regex)."),
-						include: z.string().optional().describe("Glob pattern to include files."),
-						exclude: z.string().optional().describe("Glob pattern to exclude files."),
-						limit: z.number().int().positive().optional().describe("Maximum matches. Defaults to 100."),
-					},
+					inputSchema,
 					annotations: { readOnlyHint: true },
 				},
-				async (args) => {
-					ctx.rfs();
-					return { content: [{ type: "text", text: `[stub] grep: pattern=${args.pattern}` }] };
-				},
+				(args) => handle(ctx, args),
 			);
 		},
 	};

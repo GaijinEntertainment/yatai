@@ -1,103 +1,143 @@
 # Kensai Review MCP Server
 
 Stateful stdio MCP server for the kensai code review pipeline. Single active session per server instance — all tools are
-bound to the session's project root. Tool names are scoped by entity: `session-*`, `grounding-*`, `finding-*`, etc.
+bound to the session's project root. Tool names use `snake_case`.
 
 Response format: LLMXML (pseudo-XML optimized for LLM consumption) — see `src/llmxml/`.
 
 ## Architecture
 
-`session-start` performs heavy initialization: validates git, walks the file tree to build a path index (tree-structured
-with file sizes and symlink detection), fetches deterministic data (commit message, diff, changed files). All subsequent
-tools operate within the session's project root.
+**Toolsets as providers.** Each toolset defines its own tools internally and exposes them via a `tools()` method
+returning `ToolRegistrar[]`. Toolsets are domain-scoped: session, fs, git, findings.
 
-Every tool has two layers:
+**SessionToolset as binder.** A single `bind(server)` call registers all tools — session tools (always enabled) and
+dependant toolset tools (start disabled). No separate registry class; SessionToolset IS the registry.
 
-- **Programmatic core** — pure function, callable internally (e.g., session-start calls the indexer)
-- **MCP wrapper** — registers the core as an MCP tool with schema and session guard
+**Dynamic tool visibility.** Dependant tools are hidden from MCP tool listing via `RegisteredTool.disable()` until a
+session is active. The SDK auto-sends `tools/list_changed` notifications on enable/disable.
 
-A centralized tool guard intercepts all MCP tool calls and rejects them with a standardized error if no session is
-active. Transparent to MCP tool listing — tools always appear, but calls fail without a session.
+**Declarative state sync.** On session lifecycle events, `#enabledTools()` computes the full desired set of enabled tool
+names, and `#sync()` converges — enables what should be on, disables what should be off. No incremental tracking.
+
+**Lazy dependency injection.** `ToolContext` provides lazy accessors (`rfs()`, `findings()`, `grounding()`) that resolve
+against the current session at call time. Toolsets are stateless — all state lives in `Session`.
+
+**`session_start` is fat.** Takes root + mode, creates `Session` via `Session.start()` — validates git, builds
+PathIndex, collects diffs and metadata in parallel.
+
+**Phase state machine.** `Session.phase` tracks pipeline progress (`GROUNDING → SURFACING → PROVING → FILING →
+COMPLETE`). Phase transition tools validate preconditions and call `session.advance(to)`.
 
 ## Structure
 
 ```
 src/
-├── index.ts              — server creation, tool registration, transport
-├── llmxml/               — pseudo-XML markup builder for LLM responses
-│   ├── llmxml.ts
-│   ├── llmxml.test.ts
+├── index.ts                  — server creation, toolset wiring, transport
+├── llmxml/                   — pseudo-XML markup builder for LLM responses
 │   └── CLAUDE.md
-├── repofs/               — scoped filesystem facade composing all sub-modules
-│   ├── repofs.ts
-│   ├── repofs.test.ts
+├── repofs/                   — scoped filesystem facade composing all sub-modules
 │   ├── CLAUDE.md
-│   ├── git/              — thin git CLI abstraction with diff annotation
-│   ├── rg/               — ripgrep CLI abstraction for content search
-│   ├── pathindex/        — tree-structured file index with fuzzy/glob search
-│   └── lineiter/         — streaming line iterator with pluggable binary detection
-└── tools/                — one file per tool (TODO)
+│   ├── git/                  — thin git CLI abstraction with diff annotation
+│   ├── rg/                   — ripgrep CLI abstraction for content search
+│   ├── pathindex/            — tree-structured file index with fuzzy/glob search
+│   └── lineiter/             — streaming line iterator with pluggable binary detection
+└── toolsets/                 — one folder per toolset, one file per tool
+    ├── types.ts              — ToolRegistrar, ToolContext, SessionDependant
+    ├── result.ts             — ok(), err(), errFrom() response helpers
+    ├── session/              — session lifecycle + phase transitions (11 tools)
+    │   ├── toolset.ts        — SessionToolset (binder, sync, lifecycle)
+    │   ├── start.ts          — session_start
+    │   ├── state.ts          — session_state
+    │   ├── end.ts            — session_end
+    │   ├── observation_*.ts  — create, cancel
+    │   ├── grounding_*.ts    — store, get, complete
+    │   ├── surfacing_*.ts    — complete
+    │   ├── proving_*.ts      — complete
+    │   └── filing_*.ts       — complete
+    ├── fs/                   — filesystem + search tools (4 tools)
+    │   ├── toolset.ts        — FsToolset
+    │   ├── read_file.ts, find_files.ts, list_dir.ts, grep.ts
+    ├── git/                  — git tools (3 tools)
+    │   ├── toolset.ts        — GitToolset
+    │   ├── diff_file.ts, changed_files.ts, log.ts
+    └── findings/             — findings lifecycle tools (6 tools)
+        ├── toolset.ts        — FindingsToolset
+        ├── surface.ts, surface_clean.ts, cancel.ts
+        ├── verdict.ts, list.ts, get.ts
 ```
 
 ## Implementation Plan
 
 ### Phase 0: Infrastructure (pure library, no MCP)
 
-- [x] **llmxml** — pseudo-XML markup builder. Fluent element API, scalar attributes, one-shot content.
-- [x] **pathindex** — tree-structured file index. Async parallel walker with per-file stat, symlink
-      detection, fuzzy search (fuzzysort, multi-word waterfall), glob filtering (picomatch, include/exclude).
-      O(1) entry and directory lookup. See `src/pathindex/CLAUDE.md`.
-- [x] **lineiter** — streaming line iterator with pluggable binary detection and per-line byte cap.
-      Consumes `AsyncIterable<Buffer>` (e.g. `createReadStream`). Port from Go `fstoolset/lineiter`.
-      Foundation for `fs-file-read`. See `src/lineiter/CLAUDE.md`.
-- [x] **git** — thin git CLI abstraction. `Repo` class with `open`, `diffFile`, `changedFiles`, `log`.
-      Diff annotation utilities (`annotateDiff`, `parseHunkStart`, `countDiffLines`).
-      Port from Go `git/repo.go` + `gittoolset/annotate.go`. See `src/git/CLAUDE.md`.
-- [x] **rg** — ripgrep CLI abstraction. `grep(root, pattern, options?, signal?)` with multi-target
-      support (`string[]`), output truncation, and configurable directory exclusions.
-      Port from Go `tools/v2/searchtoolset/grep.go`. See `src/rg/CLAUDE.md`.
-- [x] **repofs** — scoped filesystem facade. Composes PathIndex, Repo, and rg behind containment
-      layer (path escape prevention, symlink rejection). Provides `readFile` (lineiter-based with
-      binary detection, line windowing), `listDir` (index-based traversal with depth control),
-      `findFiles`/`globFiles` (pathindex delegation), `grep` (rg delegation), and read tracking
-      for future instruction resolution. See `src/repofs/CLAUDE.md`.
+- [x] **llmxml** — pseudo-XML markup builder. See `src/llmxml/CLAUDE.md`.
+- [x] **pathindex** — tree-structured file index. See `src/repofs/pathindex/CLAUDE.md`.
+- [x] **lineiter** — streaming line iterator. See `src/repofs/lineiter/CLAUDE.md`.
+- [x] **git** — thin git CLI abstraction. See `src/repofs/git/CLAUDE.md`.
+- [x] **rg** — ripgrep CLI abstraction. See `src/repofs/rg/CLAUDE.md`.
+- [x] **repofs** — scoped filesystem facade. See `src/repofs/CLAUDE.md`.
 
-### Phase 1: Session context + tool guard
+### Phase 1: Toolset infrastructure + tool stubs
 
-- [ ] **session rework** — `session-start` becomes heavy init: takes root + mode, validates git, builds
-      pathindex, fetches commit message + diff + changed files. Stores all deterministic data.
-- [ ] **tool guard** — centralized wrapper that intercepts all MCP tool calls, checks for active session, returns
-      standardized error if none. Transparent to MCP tool listing.
+- [x] **toolset architecture** — toolsets as providers, SessionToolset as binder, dynamic
+      tool visibility via enable/disable, declarative state sync
+- [x] **tool stubs** — 22 tools across 4 toolsets (session, fs, git, findings), all with
+      stub handlers returning placeholder text
 
-### Phase 2: Tools (programmatic core + MCP wrapper each)
+### Phase 2: Tool implementation
 
-Session + git:
+Session:
 
-- [ ] **session-start** — init pathindex, git context, deterministic data gathering
-- [ ] **session-state** — current phase, session info
-- [ ] **git-diff** — diff for review mode, context lines param
-- [ ] **git-changed-files** — name-status list for review mode
+- [x] **session_start** — fat init: RepoFs.open, git context, deterministic data gathering
+- [x] **session_state** — current phase, session info, finding count
+- [x] **session_end** — clear dependants, destroy session
 
-Filesystem + search:
+Filesystem:
 
-- [ ] **fs-file-read** — read file with line numbers, binary detection, line cap, path-miss suggestions via
-      `fuzzySearch`
-- [ ] **fs-dir-list** — directory listing via pathindex tree (`dir()` -> render children with sizes)
-- [ ] **search-find-files** — file search via pathindex `globSearch`/`fuzzySearch`
-- [ ] **search-grep** — content search via ripgrep subprocess
+- [ ] **read_file** — read file with line numbers, binary detection, line cap
+- [ ] **list_dir** — directory listing via pathindex tree
+- [ ] **find_files** — file search via pathindex fuzzySearch/globSearch
+- [ ] **grep** — content search via ripgrep
 
-Remaining git:
+Git:
 
-- [ ] **git-log** — commit history with format control
-- [ ] **git-annotate** — blame/annotate
+- [ ] **diff_file** — annotated diff for a single file
+- [ ] **changed_files** — name-status list for review mode
+- [ ] **log** — commit history
 
-### Phase 3: Review tools rebinding
+Findings:
 
-- [ ] Rebind existing review tools (grounding, surfacing, proving, filing) to session guard
+- [x] **finding_surface** — record a finding during surfacing
+- [x] **surface_clean** — report a clean dimension
+- [x] **finding_cancel** — retract a finding
+- [x] **finding_verdict** — verdict a finding (confirmed/rejected)
+- [x] **findings_list** — list findings with filter
+- [x] **finding_get** — get a single finding
+
+Phase transitions:
+
+- [x] **grounding_store** / **grounding_get** — persist and retrieve grounding context
+- [x] **observation_create** / **observation_cancel** — incremental observations during grounding
+- [x] **grounding_complete** — GROUNDING -> SURFACING
+- [x] **surfacing_complete** — SURFACING -> PROVING (or FILING if 0 findings)
+- [x] **proving_complete** — PROVING -> FILING
+- [x] **filing_complete** — FILING -> COMPLETE
+
+### Phase 3: Phase-gated tool visibility
+
+- [ ] Extend `#enabledTools()` to account for current phase — enable/disable tools per phase
+
+## Review Modes
+
+| Mode          | Compares             | Use case                     |
+| ------------- | -------------------- | ---------------------------- |
+| `committed`   | HEAD~1..HEAD         | Review the topmost commit    |
+| `uncommitted` | HEAD..working tree   | Review uncommitted changes   |
+| `all`         | HEAD~1..working tree | Topmost commit + uncommitted |
 
 ## Pipeline
 
-Four phases, strictly ordered. Each phase has dedicated tools that only work during that phase.
+Four phases, strictly ordered. Completion of each phase starts the next.
 
 ```
 IDLE -> GROUNDING -> SURFACING -> PROVING -> FILING -> COMPLETE
@@ -106,8 +146,13 @@ IDLE -> GROUNDING -> SURFACING -> PROVING -> FILING -> COMPLETE
 
 ## Conventions
 
-- Each tool lives in its own file under `tools/`, exporting a `register(server: McpServer)` function
-- Tool names are scoped: `session-*`, `grounding-*`, `finding-*`, `git-*`, `fs-*`, `search-*`
+- Each toolset lives in its own folder under `toolsets/`, each tool in a dedicated file
+- Tool names use `snake_case`
+- Tool files follow a three-part pattern: module-level `inputSchema` (z.object), standalone `handle()` function,
+  thin factory exporting `ToolRegistrar` — see `src/toolsets/CLAUDE.md` for the full template
+- All tool responses use `ok()`/`err()`/`errFrom()` from `result.ts` — never construct `CallToolResult` directly
+- Domain errors are caught in `handle()` and returned via `errFrom()`, not thrown through the SDK
+- Toolsets implement `SessionDependant` for session lifecycle injection via `ToolContext`
 - Infrastructure libraries (`pathindex`, `lineiter`, `llmxml`) are pure — no MCP dependency, independently testable
 - Each module has its own `CLAUDE.md` documenting API and design
 - Use `vp check` for formatting + linting + type-checking, `vp test` for tests, `vp test bench` for benchmarks

@@ -1,26 +1,27 @@
 import { z } from "zod";
 
+import { ok } from "../result.ts";
 import type { ToolRegistrar } from "../types.ts";
 
-/** surface_clean tool — report that a review dimension was examined and found clean. */
-export function surfaceCleanTool(): ToolRegistrar {
-	const name = "surface_clean";
+const inputSchema = z.object({
+	dimension: z.string().describe("Review dimension that was examined (e.g. security, performance)."),
+	notes: z.string().optional().describe("Optional notes on what was checked."),
+});
 
+type Input = z.infer<typeof inputSchema>;
+
+function handle(args: Input) {
+	return ok(`Dimension ${args.dimension}: clean.`);
+}
+
+export function surfaceCleanTool(): ToolRegistrar {
 	return {
-		name,
+		name: "surface_clean",
 		register(server) {
 			return server.registerTool(
-				name,
-				{
-					description: "Report that a review dimension was examined and found clean (no findings).",
-					inputSchema: {
-						dimension: z.string().describe("Review dimension that was examined (e.g. security, performance)."),
-						notes: z.string().optional().describe("Optional notes on what was checked."),
-					},
-				},
-				async (args) => {
-					return { content: [{ type: "text", text: `[stub] surface_clean: dimension=${args.dimension}` }] };
-				},
+				"surface_clean",
+				{ description: "Report that a review dimension was examined and found clean (no findings).", inputSchema },
+				(args) => handle(args),
 			);
 		},
 	};
