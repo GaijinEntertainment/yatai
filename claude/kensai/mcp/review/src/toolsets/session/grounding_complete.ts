@@ -1,30 +1,28 @@
-import type { GroundingStorage } from "../../session/grounding-storage.ts";
-import type { ToolRegistrar } from "../types.ts";
+import { ok, err } from "../result.ts";
+import type { Session, ToolRegistrar } from "../types.ts";
 
-/** Callbacks provided by SessionToolset for grounding_complete. */
-export interface GroundingCompleteContext {
-	grounding(): GroundingStorage;
+interface GroundingCompleteContext {
+	getSession(): Session;
 }
 
-/** grounding_complete tool — transition from GROUNDING to SURFACING phase. */
-export function groundingCompleteTool(ctx: GroundingCompleteContext): ToolRegistrar {
-	const name = "grounding_complete";
+function handle(ctx: GroundingCompleteContext) {
+	const session = ctx.getSession();
 
+	if (session.phase !== "GROUNDING") return err(`Cannot complete grounding: current phase is ${session.phase}.`);
+	if (!session.grounding.hasContent()) return err("Cannot complete grounding: no grounding context stored.");
+
+	session.advance("SURFACING");
+	return ok("Grounding complete. Phase: SURFACING.");
+}
+
+export function groundingCompleteTool(ctx: GroundingCompleteContext): ToolRegistrar {
 	return {
-		name,
+		name: "grounding_complete",
 		register(server) {
 			return server.registerTool(
-				name,
+				"grounding_complete",
 				{ description: "Complete the grounding phase. Transitions from GROUNDING to SURFACING." },
-				async () => {
-					if (!ctx.grounding().hasContent()) {
-						return {
-							content: [{ type: "text", text: "Cannot complete: no grounding context stored." }],
-							isError: true,
-						};
-					}
-					return { content: [{ type: "text", text: "Grounding complete." }] };
-				},
+				() => handle(ctx),
 			);
 		},
 	};

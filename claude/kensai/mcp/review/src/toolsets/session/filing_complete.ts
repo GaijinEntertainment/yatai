@@ -1,18 +1,27 @@
-import type { ToolRegistrar } from "../types.ts";
+import { ok, err } from "../result.ts";
+import type { Session, ToolRegistrar } from "../types.ts";
 
-/** filing_complete tool — complete the review. */
-export function filingCompleteTool(): ToolRegistrar {
-	const name = "filing_complete";
+interface FilingCompleteContext {
+	getSession(): Session;
+}
 
+function handle(ctx: FilingCompleteContext) {
+	const session = ctx.getSession();
+
+	if (session.phase !== "FILING") return err(`Cannot complete filing: current phase is ${session.phase}.`);
+
+	session.advance("COMPLETE");
+	return ok("Filing complete. Review finished. Phase: COMPLETE.");
+}
+
+export function filingCompleteTool(ctx: FilingCompleteContext): ToolRegistrar {
 	return {
-		name,
+		name: "filing_complete",
 		register(server) {
 			return server.registerTool(
-				name,
+				"filing_complete",
 				{ description: "Complete the filing phase and the review. Transitions from FILING to COMPLETE." },
-				async () => {
-					return { content: [{ type: "text", text: "[stub] filing_complete" }] };
-				},
+				() => handle(ctx),
 			);
 		},
 	};

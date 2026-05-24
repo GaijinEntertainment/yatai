@@ -1,34 +1,32 @@
 import { z } from "zod";
 
-import type { FindingsStorage } from "../../session/findings-storage.ts";
-import type { ToolRegistrar } from "../types.ts";
+import { ok } from "../result.ts";
+import type { ToolContext, ToolRegistrar } from "../types.ts";
 
-/** Callbacks provided by FindingsToolset for findings_list. */
-export interface ListContext {
-	findings(): FindingsStorage;
+const inputSchema = z.object({
+	dimension: z.string().optional().describe("Filter by review dimension."),
+	status: z.enum(["pending", "confirmed", "rejected", "cancelled"]).optional().describe("Filter by status."),
+});
+
+type Input = z.infer<typeof inputSchema>;
+
+function handle(ctx: ToolContext, args: Input) {
+	const results = ctx.findings().list({ dimension: args.dimension, status: args.status });
+	return ok(JSON.stringify(results));
 }
 
-/** findings_list tool — list all findings with optional filtering. */
-export function findingsListTool(ctx: ListContext): ToolRegistrar {
-	const name = "findings_list";
-
+export function findingsListTool(ctx: ToolContext): ToolRegistrar {
 	return {
-		name,
+		name: "findings_list",
 		register(server) {
 			return server.registerTool(
-				name,
+				"findings_list",
 				{
 					description: "List all findings in the current review, with optional filtering.",
-					inputSchema: {
-						dimension: z.string().optional().describe("Filter by review dimension."),
-						status: z.enum(["pending", "confirmed", "rejected", "cancelled"]).optional().describe("Filter by status."),
-					},
+					inputSchema,
 					annotations: { readOnlyHint: true },
 				},
-				async (args) => {
-					const results = ctx.findings().list({ dimension: args.dimension, status: args.status });
-					return { content: [{ type: "text", text: JSON.stringify(results) }] };
-				},
+				(args) => handle(ctx, args),
 			);
 		},
 	};

@@ -1,33 +1,32 @@
 import { z } from "zod";
 
-import type { FindingsStorage } from "../../session/findings-storage.ts";
-import type { ToolRegistrar } from "../types.ts";
+import { errFrom, ok } from "../result.ts";
+import type { ToolContext, ToolRegistrar } from "../types.ts";
 
-/** Callbacks provided by FindingsToolset for finding_cancel. */
-export interface CancelContext {
-	findings(): FindingsStorage;
+const inputSchema = z.object({
+	finding_id: z.string().describe("Finding ID (e.g. F1)."),
+	reason: z.string().optional().describe("Reason for cancellation."),
+});
+
+type Input = z.infer<typeof inputSchema>;
+
+function handle(ctx: ToolContext, args: Input) {
+	try {
+		ctx.findings().cancel(args.finding_id, args.reason);
+	} catch (error) {
+		return errFrom(error);
+	}
+	return ok(`Finding ${args.finding_id} cancelled.`);
 }
 
-/** finding_cancel tool — retract a previously surfaced finding. */
-export function findingCancelTool(ctx: CancelContext): ToolRegistrar {
-	const name = "finding_cancel";
-
+export function findingCancelTool(ctx: ToolContext): ToolRegistrar {
 	return {
-		name,
+		name: "finding_cancel",
 		register(server) {
 			return server.registerTool(
-				name,
-				{
-					description: "Retract a previously surfaced finding.",
-					inputSchema: {
-						finding_id: z.string().describe("Finding ID (e.g. F1)."),
-						reason: z.string().optional().describe("Reason for cancellation."),
-					},
-				},
-				async (args) => {
-					ctx.findings().cancel(args.finding_id, args.reason);
-					return { content: [{ type: "text", text: `Finding ${args.finding_id} cancelled.` }] };
-				},
+				"finding_cancel",
+				{ description: "Retract a previously surfaced finding.", inputSchema },
+				(args) => handle(ctx, args),
 			);
 		},
 	};

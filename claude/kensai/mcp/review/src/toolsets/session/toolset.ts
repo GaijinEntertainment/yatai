@@ -38,12 +38,17 @@ export class SessionToolset {
 	/** Register all tools (own + dependants) on the server. Dependant tools start disabled. */
 	bind(server: McpServer): void {
 		const ctx: ToolContext = {
+			session: () => this.#require(),
 			rfs: () => this.#require().rfs,
 			findings: () => this.#require().findings,
 			grounding: () => this.#require().grounding,
 		};
 
-		for (const reg of this.#ownTools(ctx)) {
+		const sessionCtx = {
+			getSession: () => this.#require(),
+		};
+
+		for (const reg of this.#ownTools(ctx, sessionCtx)) {
 			this.#handles.set(reg.name, reg.register(server));
 			this.#ownToolNames.push(reg.name);
 		}
@@ -58,7 +63,7 @@ export class SessionToolset {
 		}
 	}
 
-	#ownTools(ctx: ToolContext) {
+	#ownTools(ctx: ToolContext, sessionCtx: { getSession(): Session }) {
 		return [
 			sessionStartTool({
 				getSession: () => this.#session,
@@ -81,10 +86,10 @@ export class SessionToolset {
 			observationCancelTool(ctx),
 			groundingStoreTool(ctx),
 			groundingGetTool(ctx),
-			groundingCompleteTool(ctx),
-			surfacingCompleteTool(),
-			provingCompleteTool(),
-			filingCompleteTool(),
+			groundingCompleteTool(sessionCtx),
+			surfacingCompleteTool(sessionCtx),
+			provingCompleteTool(sessionCtx),
+			filingCompleteTool(sessionCtx),
 		];
 	}
 

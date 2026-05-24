@@ -1,35 +1,66 @@
 import { z } from "zod";
 
-import type { RepoFs } from "../../repofs/repofs.ts";
-import type { ToolRegistrar } from "../types.ts";
+import { ok, err } from "../result.ts";
+import type { ToolContext, ToolRegistrar } from "../types.ts";
 
-/** Callbacks provided by FsToolset for list_dir. */
-export interface ListDirContext {
-	rfs(): RepoFs;
+const inputSchema = z.object({
+	path: z.string().optional().describe("Directory path relative to root. Defaults to root."),
+	max_depth: z.number().int().positive().optional().describe("Recursion depth. Defaults to 1."),
+	max_entries: z.number().int().positive().optional().describe("Maximum entries. Defaults to 1000."),
+});
+
+type Input = z.infer<typeof inputSchema>;
+
+function handle(ctx: ToolContext, args: Input) {
+	const dirPath = args.path ?? ".";
+	const maxDepth = args.max_depth ?? 1;
+	const maxEntries = args.max_entries ?? 1000;
+
+	const dir = ctx.rfs().index.dir(dirPath);
+	if (!dir) return err(`Directory not found: ${dirPath}`);
+
+	const entries: string[] = [];
+	collect(dir.children, "", maxDepth, 1, maxEntries, entries);
+
+	return ok(entries.join("\n"));
 }
 
-/** list_dir tool — list directory entries from the repository index. */
-export function listDirTool(ctx: ListDirContext): ToolRegistrar {
-	const name = "list_dir";
+function collect(
+	children: import("../../repofs/pathindex/pathindex.ts").IndexEntry[],
+	prefix: string,
+	maxDepth: number,
+	currentDepth: number,
+	maxEntries: number,
+	out: string[],
+): void {
+	for (const child of children) {
+		if (out.length >= maxEntries) return;
 
+		const path = prefix ? `${prefix}/${child.name}` : child.name;
+
+		if (child.type === "dir") {
+			out.push(`${path}/`);
+			if (currentDepth < maxDepth) {
+				collect(child.children, path, maxDepth, currentDepth + 1, maxEntries, out);
+			}
+		} else {
+			out.push(path);
+		}
+	}
+}
+
+export function listDirTool(ctx: ToolContext): ToolRegistrar {
 	return {
-		name,
+		name: "list_dir",
 		register(server) {
 			return server.registerTool(
-				name,
+				"list_dir",
 				{
 					description: "List directory entries from the repository index.",
-					inputSchema: {
-						path: z.string().optional().describe("Directory path relative to root. Defaults to root."),
-						max_depth: z.number().int().positive().optional().describe("Recursion depth. Defaults to 1."),
-						max_entries: z.number().int().positive().optional().describe("Maximum entries. Defaults to 1000."),
-					},
+					inputSchema,
 					annotations: { readOnlyHint: true },
 				},
-				async (args) => {
-					ctx.rfs();
-					return { content: [{ type: "text", text: `[stub] list_dir: path=${args.path ?? "."}` }] };
-				},
+				(args) => handle(ctx, args),
 			);
 		},
 	};

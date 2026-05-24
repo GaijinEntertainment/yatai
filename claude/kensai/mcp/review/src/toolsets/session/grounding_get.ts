@@ -1,30 +1,22 @@
-import type { GroundingStorage } from "../../session/grounding-storage.ts";
-import type { ToolRegistrar } from "../types.ts";
+import { ok } from "../result.ts";
+import type { ToolContext, ToolRegistrar } from "../types.ts";
 
-/** Callbacks provided by SessionToolset for grounding_get. */
-export interface GroundingGetContext {
-	grounding(): GroundingStorage;
+function handle(ctx: ToolContext) {
+	const storage = ctx.grounding();
+	return ok(JSON.stringify({ grounding: storage.result(), observations: storage.observations() }));
 }
 
-/** grounding_get tool — retrieve stored grounding context. */
-export function groundingGetTool(ctx: GroundingGetContext): ToolRegistrar {
-	const name = "grounding_get";
-
+export function groundingGetTool(ctx: ToolContext): ToolRegistrar {
 	return {
-		name,
+		name: "grounding_get",
 		register(server) {
 			return server.registerTool(
-				name,
+				"grounding_get",
 				{
 					description: "Retrieve the stored grounding context. Available from SURFACING onward.",
 					annotations: { readOnlyHint: true },
 				},
-				async () => {
-					const storage = ctx.grounding();
-					const grounding = storage.result();
-					const observations = storage.observations();
-					return { content: [{ type: "text", text: JSON.stringify({ grounding, observations }) }] };
-				},
+				() => handle(ctx),
 			);
 		},
 	};

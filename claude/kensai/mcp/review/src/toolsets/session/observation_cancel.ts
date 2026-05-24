@@ -1,33 +1,32 @@
 import { z } from "zod";
 
-import type { GroundingStorage } from "../../session/grounding-storage.ts";
-import type { ToolRegistrar } from "../types.ts";
+import { errFrom, ok } from "../result.ts";
+import type { ToolContext, ToolRegistrar } from "../types.ts";
 
-/** Callbacks provided by SessionToolset for observation_cancel. */
-export interface ObservationCancelContext {
-	grounding(): GroundingStorage;
+const inputSchema = z.object({
+	observation_id: z.string().describe("Observation ID (e.g. O1)."),
+	reason: z.string().optional().describe("Why the observation was disproved."),
+});
+
+type Input = z.infer<typeof inputSchema>;
+
+function handle(ctx: ToolContext, args: Input) {
+	try {
+		ctx.grounding().cancelObservation(args.observation_id, args.reason);
+	} catch (error) {
+		return errFrom(error);
+	}
+	return ok(`Observation ${args.observation_id} cancelled.`);
 }
 
-/** observation_cancel tool — retract an observation disproved during investigation. */
-export function observationCancelTool(ctx: ObservationCancelContext): ToolRegistrar {
-	const name = "observation_cancel";
-
+export function observationCancelTool(ctx: ToolContext): ToolRegistrar {
 	return {
-		name,
+		name: "observation_cancel",
 		register(server) {
 			return server.registerTool(
-				name,
-				{
-					description: "Retract an observation that was disproved during investigation.",
-					inputSchema: {
-						observation_id: z.string().describe("Observation ID (e.g. O1)."),
-						reason: z.string().optional().describe("Why the observation was disproved."),
-					},
-				},
-				async (args) => {
-					ctx.grounding().cancelObservation(args.observation_id, args.reason);
-					return { content: [{ type: "text", text: `Observation ${args.observation_id} cancelled.` }] };
-				},
+				"observation_cancel",
+				{ description: "Retract an observation that was disproved during investigation.", inputSchema },
+				(args) => handle(ctx, args),
 			);
 		},
 	};

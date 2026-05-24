@@ -1,30 +1,22 @@
+import { ok, err } from "../result.ts";
 import type { Session, ToolRegistrar } from "../types.ts";
 
-/** Callbacks provided by SessionToolset for session_end. */
 export interface EndContext {
 	getSession(): Session | null;
 	end(): void;
 }
 
-/** session_end tool — ends the active review session. */
+function handle(ctx: EndContext) {
+	if (!ctx.getSession()) return err("No active session.");
+	ctx.end();
+	return ok("Session ended.");
+}
+
 export function sessionEndTool(ctx: EndContext): ToolRegistrar {
-	const name = "session_end";
-
 	return {
-		name,
+		name: "session_end",
 		register(server) {
-			return server.registerTool(
-				name,
-				{
-					description: "End the active review session.",
-				},
-				async () => {
-					if (!ctx.getSession()) throw new Error("No active session.");
-					ctx.end();
-
-					return { content: [{ type: "text", text: "Session ended." }] };
-				},
-			);
+			return server.registerTool("session_end", { description: "End the active review session." }, () => handle(ctx));
 		},
 	};
 }

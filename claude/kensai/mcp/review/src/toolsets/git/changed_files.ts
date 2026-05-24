@@ -1,28 +1,22 @@
-import type { RepoFs } from "../../repofs/repofs.ts";
-import type { ToolRegistrar } from "../types.ts";
+import { ok } from "../result.ts";
+import type { ToolContext, ToolRegistrar } from "../types.ts";
 
-/** Callbacks provided by GitToolset for changed_files. */
-export interface ChangedFilesContext {
-	rfs(): RepoFs;
+function handle(ctx: ToolContext) {
+	const session = ctx.session();
+	return ok(JSON.stringify(session.changedFiles));
 }
 
-/** changed_files tool — list files changed in the review. */
-export function changedFilesTool(ctx: ChangedFilesContext): ToolRegistrar {
-	const name = "changed_files";
-
+export function changedFilesTool(ctx: ToolContext): ToolRegistrar {
 	return {
-		name,
+		name: "changed_files",
 		register(server) {
 			return server.registerTool(
-				name,
+				"changed_files",
 				{
 					description: "List files changed in the current review with status (added, modified, deleted, renamed).",
 					annotations: { readOnlyHint: true },
 				},
-				async () => {
-					ctx.rfs();
-					return { content: [{ type: "text", text: "[stub] changed_files" }] };
-				},
+				() => handle(ctx),
 			);
 		},
 	};

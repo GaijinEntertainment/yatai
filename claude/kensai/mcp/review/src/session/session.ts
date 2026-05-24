@@ -8,6 +8,17 @@ import { GroundingStorage } from "./grounding-storage.ts";
 /** Review mode — determines which changes are under review. */
 export type ReviewMode = "committed" | "uncommitted" | "all";
 
+/** Pipeline phase — strictly ordered, enforced by {@link Session.advance}. */
+export type SessionPhase = "GROUNDING" | "SURFACING" | "PROVING" | "FILING" | "COMPLETE";
+
+const VALID_TRANSITIONS: Record<SessionPhase, readonly SessionPhase[]> = {
+	GROUNDING: ["SURFACING"],
+	SURFACING: ["PROVING", "FILING"],
+	PROVING: ["FILING"],
+	FILING: ["COMPLETE"],
+	COMPLETE: [],
+};
+
 /** A fetched diff for a single file, preserving changedFiles order. */
 export interface FileDiff {
 	readonly path: string;
@@ -43,6 +54,20 @@ export class Session {
 	readonly changedFiles: readonly GitFileStat[];
 	readonly manifest: readonly ManifestEntry[];
 	readonly diffs: readonly FileDiff[];
+	#phase: SessionPhase = "GROUNDING";
+
+	get phase(): SessionPhase {
+		return this.#phase;
+	}
+
+	/** Advance the session to the given phase. Throws {@link SessionError} if the transition is invalid. */
+	advance(to: SessionPhase): void {
+		const allowed = VALID_TRANSITIONS[this.#phase];
+		if (!allowed.includes(to)) {
+			throw new SessionError(`Cannot transition from ${this.#phase} to ${to}`);
+		}
+		this.#phase = to;
+	}
 
 	/** Initialize a review session — validates git, builds PathIndex, collects diffs and metadata. */
 	static async start(root: string, mode: ReviewMode): Promise<Session> {
@@ -88,7 +113,8 @@ function generateId(): string {
 	return createHash("sha1").update(String(Date.now())).digest("hex");
 }
 
-function resolveRefs(mode: ReviewMode): { base: string; head: string | null } {
+/** Returns base and head refs for the given review mode. */
+export function resolveRefs(mode: ReviewMode): { base: string; head: string | null } {
 	switch (mode) {
 		case "committed":
 			return { base: "HEAD~1", head: "HEAD" };
