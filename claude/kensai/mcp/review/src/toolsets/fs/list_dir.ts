@@ -1,50 +1,89 @@
 import { z } from "zod";
 
-import { ok, err } from "../result.ts";
+import type { IndexEntry } from "../../repofs/pathindex/pathindex.ts";
+import { formatSuggestions, ok, suggestPaths } from "../result.ts";
 import type { ToolContext, ToolRegistrar } from "../types.ts";
 
+const DEFAULT_MAX_DEPTH = 1;
+const DEFAULT_MAX_ENTRIES = 1000;
+const EXCLUDE_DIRS = ["vendor", "node_modules", ".git", "dist", "build", "__pycache__"];
+
 const inputSchema = z.object({
-	path: z.string().optional().describe("Directory path relative to root. Defaults to root."),
-	max_depth: z.number().int().positive().optional().describe("Recursion depth. Defaults to 1."),
-	max_entries: z.number().int().positive().optional().describe("Maximum entries. Defaults to 1000."),
+	path: z.string().describe('Directory path relative to root. Use "." for root.'),
+	max_depth: z
+		.number()
+		.int()
+		.positive()
+		.nullable()
+		.optional()
+		.describe("Recursion depth. 1 = direct children. Defaults to 1."),
+	skip_dotfiles: z.boolean().nullable().optional().describe("Omit entries starting with '.'. Defaults to false."),
 });
 
 type Input = z.infer<typeof inputSchema>;
 
 function handle(ctx: ToolContext, args: Input) {
-	const dirPath = args.path ?? ".";
-	const maxDepth = args.max_depth ?? 1;
-	const maxEntries = args.max_entries ?? 1000;
+	const dirPath = args.path || ".";
+	const maxDepth = args.max_depth ?? DEFAULT_MAX_DEPTH;
+	const skipDotfiles = args.skip_dotfiles ?? false;
 
-	const dir = ctx.rfs().index.dir(dirPath);
-	if (!dir) return err(`Directory not found: ${dirPath}`);
+	const rfs = ctx.rfs();
+	const dir = rfs.index.dir(dirPath);
 
-	const entries: string[] = [];
-	collect(dir.children, "", maxDepth, 1, maxEntries, entries);
+	if (!dir) {
+		if (rfs.fileExists(dirPath)) {
+			return ok(`[${dirPath}: is a file, not a directory (use read_file instead)]`);
+		}
+		return ok(`[directory not found: ${dirPath}]${formatSuggestions(suggestPaths(rfs, dirPath))}`);
+	}
 
-	return ok(entries.join("\n"));
+	const state = { count: 0, truncated: false };
+	const lines: string[] = [];
+
+	collect(dir.children, dirPath === "." ? "" : dirPath, maxDepth, 1, skipDotfiles, DEFAULT_MAX_ENTRIES, lines, state);
+
+	if (lines.length === 0 && !state.truncated) return ok("[directory is empty]");
+
+	let body = lines.join("");
+	if (state.truncated) {
+		body += `... (truncated at ${state.count} entries; scope with search tools)\n`;
+	}
+
+	return ok(body);
 }
 
 function collect(
-	children: import("../../repofs/pathindex/pathindex.ts").IndexEntry[],
+	children: IndexEntry[],
 	prefix: string,
 	maxDepth: number,
 	currentDepth: number,
+	skipDotfiles: boolean,
 	maxEntries: number,
 	out: string[],
+	state: { count: number; truncated: boolean },
 ): void {
 	for (const child of children) {
-		if (out.length >= maxEntries) return;
+		if (state.truncated) return;
 
-		const path = prefix ? `${prefix}/${child.name}` : child.name;
+		if (skipDotfiles && child.name.startsWith(".")) continue;
+
+		if (state.count >= maxEntries) {
+			state.truncated = true;
+			return;
+		}
+
+		const rel = prefix ? `${prefix}/${child.name}` : child.name;
+		state.count++;
 
 		if (child.type === "dir") {
-			out.push(`${path}/`);
-			if (currentDepth < maxDepth) {
-				collect(child.children, path, maxDepth, currentDepth + 1, maxEntries, out);
+			out.push(`${rel}/\n`);
+			if (currentDepth < maxDepth && !EXCLUDE_DIRS.includes(child.name)) {
+				collect(child.children, rel, maxDepth, currentDepth + 1, skipDotfiles, maxEntries, out, state);
 			}
+		} else if (child.type === "file") {
+			out.push(`${rel} (${child.size} bytes)\n`);
 		} else {
-			out.push(path);
+			out.push(`${rel} -> ${child.target}\n`);
 		}
 	}
 }
@@ -56,7 +95,7 @@ export function listDirTool(ctx: ToolContext): ToolRegistrar {
 			return server.registerTool(
 				"list_dir",
 				{
-					description: "List directory entries from the repository index.",
+					description: "List directory entries with depth control. Use search tools for content, read_file for files.",
 					inputSchema,
 					annotations: { readOnlyHint: true },
 				},
