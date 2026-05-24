@@ -198,23 +198,23 @@ export class Repo {
 		return this.#path;
 	}
 
-	/** Returns the unified diff for a single file between two revisions. Empty string when unchanged. */
+	/** Returns the unified diff for a single file between two revisions. Pass `null` head to diff against working tree. */
 	async diffFile(
 		base: string,
-		head: string,
+		head: string | null,
 		filePath: string,
 		contextLines = 0,
 		signal?: AbortSignal,
 	): Promise<string> {
 		const args = ["diff", "--no-color", "--no-ext-diff"];
 		if (contextLines > 0) args.push(`-U${contextLines}`);
-		args.push(`${base}..${head}`, "--", filePath);
+		args.push(head != null ? `${base}..${head}` : base, "--", filePath);
 		return this.#exec(args, signal);
 	}
 
-	/** Returns per-file change stats between two revisions. Uses `--no-renames` (renames → add + delete). */
-	async changedFiles(base: string, head: string, signal?: AbortSignal): Promise<GitFileStat[]> {
-		const range = `${base}..${head}`;
+	/** Returns per-file change stats between two revisions. Pass `null` head to diff against working tree. Uses `--no-renames` (renames → add + delete). */
+	async changedFiles(base: string, head: string | null, signal?: AbortSignal): Promise<GitFileStat[]> {
+		const range = head != null ? `${base}..${head}` : base;
 		const [statusOut, numstatOut] = await Promise.all([
 			this.#exec(["diff", "--name-status", "--no-renames", range], signal),
 			this.#exec(["diff", "--numstat", "--no-renames", range], signal),
