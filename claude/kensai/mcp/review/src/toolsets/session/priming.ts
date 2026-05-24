@@ -112,8 +112,19 @@ export function sessionPrimingTool(ctx: PrimingContext): ToolRegistrar {
 			return server.registerTool(
 				"session_priming",
 				{
-					description:
-						"Returns full review context: metadata, changed files, file stats, and all diffs as separate blocks.",
+					description: [
+						"Returns full review context as separate content blocks: metadata, changed files, file stats, and all diffs.",
+						"",
+						"Behaviour:",
+						"  - Multi-block response. Each block is a separate content item.",
+						"  - Block 1: LLMXML <change> with commit metadata and refs.",
+						"  - Block 2: Plain text changed-files table (same format as changed_files tool).",
+						"  - Block 3: File shape metrics -- path, bytes, lines, max_line per file.",
+						'  - Block 4+: One per diff -- "Diff for path (base=X head=Y):" followed by annotated unified diff.',
+						"  - Large results (>500K chars) may be persisted to disk by the harness; agents can read individual diffs via diff_file.",
+						"",
+						"Use this tool at the start of grounding to receive all review context in one call.",
+					].join("\n"),
 					annotations: { readOnlyHint: true },
 					_meta: { "anthropic/maxResultSizeChars": 500_000 },
 				},

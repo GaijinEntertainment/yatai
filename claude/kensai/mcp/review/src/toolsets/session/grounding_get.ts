@@ -70,7 +70,15 @@ export function groundingGetTool(ctx: ToolContext): ToolRegistrar {
 			return server.registerTool(
 				"grounding_get",
 				{
-					description: "Retrieve the stored grounding context. Available from SURFACING onward.",
+					description: [
+						"Retrieve the stored grounding context. Available from SURFACING onward.",
+						"",
+						"Behaviour:",
+						"  - Returns LLMXML with <grounding> (summary, integration_surface, intent, hotspots, blindspots)",
+						"    and <observations> (all recorded observations with status).",
+						"  - Returns [no grounding stored yet] when called before grounding_store.",
+						"  - Use to recall the grounder's model of the change during surfacing and proving.",
+					].join("\n"),
 					annotations: { readOnlyHint: true },
 				},
 				() => handle(ctx),
