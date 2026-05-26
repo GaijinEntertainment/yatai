@@ -2,8 +2,8 @@
   "mcpServers": {
     "kensai": {
       "type": "stdio",
-      "command": "node",
-      "args": ["${CLAUDE_PLUGIN_ROOT}/mcp/review/src/index.ts"],
+      "command": "npx",
+      "args": ["@gaijin/kensai-review-mcp"],
       "alwaysLoad": true
     }
   }

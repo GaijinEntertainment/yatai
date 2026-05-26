@@ -42,8 +42,11 @@ phase, preventing agents from skipping steps or mixing concerns.
 
 ## Requirements
 
-- Node.js 26+ (MCP server runtime)
+- Node.js 26+
 - Agent teams enabled: set `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` in your Claude Code environment
+
+The MCP server is published as [`@gaijin/kensai-review-mcp`](https://www.npmjs.com/package/@gaijin/kensai-review-mcp)
+and fetched automatically via npx on first use. All dependencies (including ripgrep) are bundled.
 
 ## Installation
 

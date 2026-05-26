@@ -5,13 +5,20 @@
     "skill-enforcer@foundry": true,
     "the-coder@foundry": true,
     "the-workflow@foundry": true,
-    "javascript@foundry": true
+    "javascript@foundry": true,
+    "kensai@yatai": true
   },
   "extraKnownMarketplaces": {
     "foundry": {
       "source": {
         "source": "github",
         "repo": "xobotyi/cc-foundry"
+      }
+    },
+    "yatai": {
+      "source": {
+        "source": "github",
+        "repo": "GaijinEntertainment/yatai"
       }
     }
   },
