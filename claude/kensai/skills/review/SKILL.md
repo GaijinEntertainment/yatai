@@ -12,7 +12,7 @@ effort: max
 
 # Code Review
 
-**Read-only** — do not edit, write, or modify files. Reviewing, not fixing.
+**Read-only** — do not edit, write, or modify files.
 
 The kensai MCP server holds all session state. Agents self-serve context via `mcp__kensai__session_priming` — no data
 threading from lead to agents.
@@ -45,16 +45,15 @@ If mode looks like a path, treat as `$path` with mode `uncommitted`.
 
 ## Model Selection
 
-After `session_start`, check `session_state` for `changed_files` total. For changes with 20+ files, spawn all
-teammates with extended context (`model: "<current-model>[1m]"`) to ensure full priming fits. For smaller changes,
-default model is sufficient.
+After `session_start`, check `session_state` for `changed_files` total. 20+ files → spawn teammates with
+`model: "<current-model>[1m]"`. Otherwise default model.
 
 ## Pipeline
 
 ### Phase 1: Grounding
 
-1. Create a team. Spawn a `review-grounder` teammate. No data in spawn prompt — grounder calls
-   `mcp__kensai__session_priming` to get metadata, changed files, file stats, agent-instructions, and diffs.
+1. Create a team. Spawn a `review-grounder` teammate. No data in spawn prompt — grounder self-serves via
+   `session_priming`.
 2. Wait for grounder to complete. Grounder stores structured context via MCP and calls `mcp__kensai__grounding_complete`.
 3. **Shut down the grounder.**
 
@@ -110,9 +109,8 @@ default model is sufficient.
    **Self-check before spawning:** if you could copy the same dimension name to a different change and it would still
    make sense, the dimension is too generic. Rewrite it using terms from the grounding.
 
-3. Create a task per dimension. Spawn `review-surfacer` teammates in parallel — one per dimension. Spawn prompt includes
-   the dimension name and **quality criteria** — broad focus points derived from grounding hotspots. Not a methodology —
-   a short list of risk patterns the surfacer should watch for.
+3. Create a task per dimension. Spawn `review-surfacer` teammates in parallel — one per dimension. Spawn prompt:
+   dimension name + quality criteria from grounding hotspots (risk patterns to watch for, not methodology).
 
 4. **Always spawn one additional general-review surfacer** alongside the dimension surfacers. No prescribed dimension or
    quality criteria. Spawn prompt: "General review -- no prescribed dimension. Follow any thread. Focus on behavioral
