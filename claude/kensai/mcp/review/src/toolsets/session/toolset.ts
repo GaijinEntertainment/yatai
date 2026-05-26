@@ -36,7 +36,7 @@ export class SessionToolset {
 		return this.#session;
 	}
 
-	/** Register all tools (own + dependants) on the server. Only session_start is enabled initially. */
+	/** Register all tools (own + dependants) on the server. All tools start enabled; #sync() gates visibility after session lifecycle events. */
 	bind(server: McpServer): void {
 		const ctx: ToolContext = {
 			session: () => this.#require(),
@@ -50,17 +50,13 @@ export class SessionToolset {
 		};
 
 		for (const reg of this.#ownTools(ctx, sessionCtx)) {
-			const handle = reg.register(server);
-			if (reg.name !== "session_start") handle.disable();
-			this.#handles.set(reg.name, handle);
+			this.#handles.set(reg.name, reg.register(server));
 			this.#ownToolNames.push(reg.name);
 		}
 
 		for (const dep of this.#dependants) {
 			for (const reg of dep.tools(ctx)) {
-				const handle = reg.register(server);
-				handle.disable();
-				this.#handles.set(reg.name, handle);
+				this.#handles.set(reg.name, reg.register(server));
 				this.#depToolNames.push(reg.name);
 			}
 		}

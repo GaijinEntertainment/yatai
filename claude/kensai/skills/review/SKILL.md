@@ -1,5 +1,5 @@
 ---
-name: review
+name: kensai-review
 description: >-
   Local multi-agent code review with adversarial falsification. Orchestrated by the kensai MCP
   server — call `start`, follow returned instructions through grounding → surfacing → proving →
@@ -24,10 +24,13 @@ Agent teams: !`echo ${CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS:-disabled}`
 ## Prerequisites
 
 1. If agent teams shows `disabled` above, stop and tell the user:
+
    > Agent teams required. Add to settings:
+   >
    > ```json
    > { "env": { "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1" } }
    > ```
+   >
    > Then restart.
 
 2. Call `mcp__kensai__session_start` with resolved mode and path. On error, inform the user and stop.
@@ -39,6 +42,12 @@ If mode looks like a path, treat as `$path` with mode `uncommitted`.
 - **`committed`** — HEAD~1..HEAD. Review the topmost commit.
 - **`uncommitted`** (default) — HEAD..working tree. Review work-in-progress.
 - **`all`** — HEAD~1..working tree. Review commit + uncommitted (amendment scenario).
+
+## Model Selection
+
+After `session_start`, check `session_state` for `changed_files` total. For changes with 20+ files, spawn all
+teammates with extended context (`model: "<current-model>[1m]"`) to ensure full priming fits. For smaller changes,
+default model is sufficient.
 
 ## Pipeline
 

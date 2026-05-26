@@ -34,10 +34,10 @@ phase, preventing agents from skipping steps or mixing concerns.
 ## Usage
 
 ```
-/review                        # review uncommitted changes
-/review committed              # review the last commit
-/review all                    # review last commit + uncommitted (amendment preview)
-/review uncommitted ./src      # review uncommitted changes in a specific path
+/kensai-review                        # review uncommitted changes
+/kensai-review committed              # review the last commit
+/kensai-review all                    # review last commit + uncommitted (amendment preview)
+/kensai-review uncommitted ./src      # review uncommitted changes in a specific path
 ```
 
 ## Requirements

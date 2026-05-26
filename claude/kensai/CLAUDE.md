@@ -6,7 +6,7 @@ grounding, surfacing, proving, filing — with dedicated agents per phase.
 ## Pipeline
 
 ```
-/review [mode] [path]
+/kensai-review [mode] [path]
   → mcp__kensai__session_start            IDLE → GROUNDING
   → mcp__kensai__grounding_store
   → mcp__kensai__grounding_complete       GROUNDING → SURFACING
@@ -35,7 +35,7 @@ grounding, surfacing, proving, filing — with dedicated agents per phase.
 |------|---------|
 | `session_start` | Initialize session (IDLE -> GROUNDING) |
 | `session_state` | Current phase, mode, refs, file/finding counts |
-| `session_priming` | Full context: metadata, changed files, file stats, all diffs (multi-block) |
+| `session_priming` | Full context: metadata, changed files, file stats, agent-instructions, all diffs (multi-block) |
 | `session_end` | Destroy session |
 
 ### Filesystem and search (session-scoped)
@@ -83,7 +83,7 @@ grounding, surfacing, proving, filing — with dedicated agents per phase.
 
 - **MCP-first** — agents access codebase exclusively through `mcp__kensai__*` tools; no direct Read/Grep/Bash
 - **Self-serve context** — agents call `session_priming` to receive full review context; no data threading from lead
-- **Phase-gated visibility** — only `session_start` visible before session; all tools enabled after
+- **Handler-level phase enforcement** — all tools always registered; invalid-phase calls return hard error via `#require()`
 - **Dedicated completion tools** — `grounding_complete`, `surfacing_complete`, `proving_complete` (not generic `transition`)
 - **0-findings shortcut** — `surfacing_complete` jumps to FILING when no findings, skipping PROVING
 - **Recall over precision** — surfacers cast a wide net; prover applies falsification gates to filter

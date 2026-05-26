@@ -1,3 +1,5 @@
+import { z } from "zod";
+
 import { element, attr } from "../../llmxml/llmxml.ts";
 import type { GitFileStat } from "../../repofs/git/git.ts";
 import { renderInstruction } from "../../session/instructions.ts";
@@ -11,17 +13,43 @@ export interface PrimingContext {
 }
 
 const COLLAPSED_PREFIXES = ["vendor/", "node_modules/", "dist/", "build/", "__pycache__/", ".git/"];
+const PAGE_BUDGET = 350_000;
+const FOOTER_RESERVE = 200;
 
-function handle(ctx: PrimingContext) {
+const inputSchema = z.object({
+	page: z.number().int().positive().optional().describe("Page number (1-based). Defaults to 1."),
+});
+
+type Input = z.infer<typeof inputSchema>;
+
+function handle(ctx: PrimingContext, args: Input) {
 	const s = ctx.getSession();
 	if (!s) return err("[no active session]");
 
 	const { base, head } = resolveRefs(s.mode);
 	const headLabel = head ?? "working tree";
+
+	const allBlocks = buildAllBlocks(s, base, headLabel);
+	const pages = paginate(allBlocks, PAGE_BUDGET - FOOTER_RESERVE);
+	const pageNum = Math.max(1, Math.min(args.page ?? 1, pages.length));
+	const page = pages[pageNum - 1]!;
+
+	if (pages.length > 1) {
+		const status =
+			pageNum < pages.length
+				? `[page ${pageNum} of ${pages.length} — call session_priming(page=${pageNum + 1}) for next]`
+				: `[page ${pageNum} of ${pages.length} — complete]`;
+		page.push(status);
+	}
+
+	return ok(...page);
+}
+
+function buildAllBlocks(s: Session, base: string, head: string): string[] {
 	const blocks: string[] = [];
 
-	blocks.push(renderMetadata(s, base, headLabel));
-	blocks.push(renderChangedFiles(base, headLabel, s.changedFiles));
+	blocks.push(renderMetadata(s, base, head));
+	blocks.push(renderChangedFiles(base, head, s.changedFiles));
 	blocks.push(renderFileStats(s.manifest));
 
 	for (const inst of s.instructions) {
@@ -29,10 +57,32 @@ function handle(ctx: PrimingContext) {
 	}
 
 	for (const d of s.diffs) {
-		blocks.push(renderDiff(d, base, headLabel));
+		blocks.push(renderDiff(d, base, head));
 	}
 
-	return ok(...blocks);
+	return blocks;
+}
+
+function paginate(blocks: string[], budget: number): string[][] {
+	const pages: string[][] = [];
+	let current: string[] = [];
+	let used = 0;
+
+	for (const block of blocks) {
+		if (current.length > 0 && used + block.length > budget) {
+			pages.push(current);
+			current = [];
+			used = 0;
+		}
+		current.push(block);
+		used += block.length;
+	}
+
+	if (current.length > 0) {
+		pages.push(current);
+	}
+
+	return pages.length > 0 ? pages : [[]];
 }
 
 function renderMetadata(s: Session, base: string, head: string): string {
@@ -118,23 +168,26 @@ export function sessionPrimingTool(ctx: PrimingContext): ToolRegistrar {
 				"session_priming",
 				{
 					description: [
-						"Returns full review context as separate content blocks.",
+						"Returns full review context as paginated content blocks.",
 						"",
 						"Behaviour:",
 						"  - Multi-block response. Each block is a separate content item.",
 						"  - Block 1: LLMXML <change> with commit metadata and refs.",
-						"  - Block 2: Plain text changed-files table (same format as changed_files tool).",
-						"  - Block 3: File shape metrics -- path, bytes, lines, max_line per file.",
-						"  - Block 4+: <agent-instruction> blocks -- project conventions (CLAUDE.md, AGENTS.md) from directory chains.",
+						"  - Block 2: Plain text changed-files table.",
+						"  - Block 3: File shape metrics.",
+						"  - Block 4+: <agent-instruction> blocks from directory chains.",
 						"  - Remaining: One per diff -- annotated unified diff per changed file.",
-						"  - Large results (>500K chars) may be persisted to disk by the harness; agents can read individual diffs via diff_file.",
+						"  - Large changes are paginated. Footer shows current page and total.",
+						"    Call session_priming(page=N) for subsequent pages.",
+						"  - Small changes fit in one page (no footer).",
 						"",
-						"Use this tool as the first call in any review phase to receive full context.",
+						"Use this tool as the first call in any review phase. Request all pages.",
 					].join("\n"),
+					inputSchema,
 					annotations: { readOnlyHint: true },
 					_meta: { "anthropic/maxResultSizeChars": 500_000 },
 				},
-				() => handle(ctx),
+				(args) => handle(ctx, args),
 			);
 		},
 	};

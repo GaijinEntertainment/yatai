@@ -31,7 +31,7 @@ All tool handlers return `CallToolResult` via three helpers:
 
 | Toolset    | Folder      | Tools | Dependency            |
 | ---------- | ----------- | ----- | --------------------- |
-| Session    | `session/`  | 13    | None (always enabled) |
+| Session    | `session/`  | 12    | None (always enabled) |
 | Filesystem | `fs/`       | 4     | RepoFs                |
 | Git        | `git/`      | 3     | RepoFs                |
 | Findings   | `findings/` | 6     | Session state         |
@@ -40,8 +40,8 @@ All tool handlers return `CallToolResult` via three helpers:
 
 1. Each toolset creates `ToolRegistrar[]` via `tools(ctx)`
 2. `SessionToolset.bind(server)` registers all tools on the MCP server
-3. Session tools are always enabled; dependant tools start disabled
-4. `#sync()` enables/disables tools based on session state
+3. All tools start enabled (required for subagent MCP tool propagation)
+4. `#sync()` gates visibility after session lifecycle events (start/end)
 
 ## Tool File Pattern
 
