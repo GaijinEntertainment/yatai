@@ -52,6 +52,12 @@ Each ecosystem has its own instruction file (`CLAUDE.md`, `AGENTS.md`, etc.) wit
   `.claude-plugin/marketplace.json` (which lists all plugins in a single file)
 - Update both files when bumping versions
 
+**Marketplace manifest (`marketplace.json`):**
+
+- The `source` field in each plugin entry must be a `./`-prefixed relative path from the repo root to the plugin
+  directory (e.g., `"./claude/kensai"`). Bare names or paths without `./` are interpreted as unsupported source types
+- The `pluginRoot` metadata field is not honored by Claude Code — do not rely on it for path resolution
+
 **Licensing:**
 
 - Every plugin must contain a copy of the root `LICENSE` file in its directory

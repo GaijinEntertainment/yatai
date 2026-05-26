@@ -12,7 +12,7 @@
 		{
 			"name": "kensai",
 			"description": "Multi-agent code review pipeline with adversarial falsification, orchestrated by a stateful MCP server",
-			"source": "kensai",
+			"source": "./claude/kensai",
 			"version": "0.1.1",
 			"license": "MIT",
 			"keywords": [
