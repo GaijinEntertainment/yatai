@@ -12,4 +12,10 @@ export default defineConfig({
 		rules: { "vite-plus/prefer-vite-plus-imports": "error" },
 		options: { typeAware: true, typeCheck: true },
 	},
+	pack: {
+		entry: ["src/index.ts"],
+		format: ["esm"],
+		platform: "node",
+		sourcemap: true,
+	},
 });

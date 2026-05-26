@@ -1,6 +1,6 @@
 {
 	"name": "@gaijin/kensai-review-mcp",
-	"version": "0.1.1",
+	"version": "0.1.2",
 	"description": "Stateful MCP server for the kensai multi-agent code review pipeline",
 	"license": "MIT",
 	"author": {
@@ -12,17 +12,19 @@
 		"url": "https://github.com/GaijinEntertainment/yatai",
 		"directory": "claude/kensai/mcp/review"
 	},
-	"bin": "./src/index.ts",
+	"bin": "./dist/index.mjs",
 	"type": "module",
 	"publishConfig": {
 		"access": "public"
 	},
 	"scripts": {
 		"start": "node ./src/index.ts",
+		"build": "vp pack",
 		"test": "vp test",
 		"lint": "vp check",
 		"lint:fix": "vp check --fix",
-		"typecheck": "tsc --noEmit"
+		"typecheck": "tsc --noEmit",
+		"prepublishOnly": "vp check && vp test && vp pack"
 	},
 	"dependencies": {
 		"@modelcontextprotocol/sdk": "^1.29.0",

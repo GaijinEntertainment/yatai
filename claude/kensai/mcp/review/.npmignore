@@ -1,5 +1,2 @@
 *
-!/src
-*.test.ts
-*.bench.ts
-**/CLAUDE.md
+!/dist
