@@ -1,5 +1,6 @@
 import { createReadStream } from "node:fs";
 import fs from "node:fs/promises";
+import nativePath from "node:path";
 import path from "node:path/posix";
 
 import fuzzysort from "fuzzysort";
@@ -58,7 +59,7 @@ export class PathIndex {
 	readonly #fdPool = new Pool(256);
 
 	private constructor(rootPath: string) {
-		this.absRoot = path.resolve(rootPath);
+		this.absRoot = nativePath.resolve(rootPath);
 	}
 
 	/** Paths ending with "/" are directories; without are files. */
@@ -162,13 +163,13 @@ export class PathIndex {
 	async #walkDir(dir: string, signal?: AbortSignal): Promise<IndexEntryDir> {
 		signal?.throwIfAborted();
 
-		const dirEntries = await fs.readdir(path.resolve(this.absRoot, dir), { withFileTypes: true });
+		const dirEntries = await fs.readdir(nativePath.resolve(this.absRoot, dir), { withFileTypes: true });
 		const dirEntry: IndexEntryDir = { type: "dir", name: path.basename(dir), children: [] };
 		const work: Promise<void>[] = [];
 
 		for (const dirent of dirEntries) {
 			const relPath = path.join(dir, dirent.name);
-			const absPath = path.join(this.absRoot, relPath);
+			const absPath = nativePath.join(this.absRoot, relPath);
 
 			if (dirent.isSymbolicLink()) {
 				work.push(
