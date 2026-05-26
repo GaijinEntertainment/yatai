@@ -9,7 +9,7 @@ and path containment.
 | --------------- | -------------------- | ------------------------------------ |
 | `diff_file`     | path, context_lines? | Annotated diff for a single file     |
 | `changed_files` | —                    | Name-status list for the review mode |
-| `log`           | ref?, count?         | Commit history                       |
+| `log`           | count?               | Commit history from HEAD             |
 
 ## GitToolset API
 

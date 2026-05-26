@@ -167,14 +167,14 @@ reject the other as redundant. Different concerns at the same location are indep
 
 Per finding, call `mcp__kensai__finding_verdict`:
 - `finding_id` — the finding's ID
-- `result` — `"pass"` or `"reject"`
+- `verdict` — `"confirmed"` or `"rejected"`
 - `reason` — which gate failed, or why all survived
-- `severity` — PASS only: `"bug"`, `"concern"`, `"suggestion"`, `"nitpick"`
-- `blocking` — PASS only: should change not merge without addressing this?
+- `severity` — confirmed only: `"bug"`, `"concern"`, `"suggestion"`, `"nitpick"`
+- `blocking` — confirmed only: should change not merge without addressing this?
 
 ## Completing
 
 1. Verdict every finding — none may remain unverdicted.
 2. Call `mcp__kensai__proving_complete`.
-3. SendMessage to lead: proving complete, N pass / N reject.
+3. SendMessage to lead: proving complete, N confirmed / N rejected.
 4. Mark task completed.

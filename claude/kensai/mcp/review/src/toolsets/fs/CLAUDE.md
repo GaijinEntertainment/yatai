@@ -5,12 +5,12 @@ path containment, file reading, index search, and ripgrep.
 
 ## Tools
 
-| Tool         | Args                                | Purpose                               |
-| ------------ | ----------------------------------- | ------------------------------------- |
-| `read_file`  | path, line_offset?, line_limit?     | Read file with line numbers           |
-| `find_files` | pattern, limit?                     | Fuzzy-search file paths in the index  |
-| `list_dir`   | path?, max_depth?, max_entries?     | List directory entries from the index |
-| `grep`       | pattern, include?, exclude?, limit? | Content search via ripgrep            |
+| Tool         | Args                                                   | Purpose                               |
+| ------------ | ------------------------------------------------------ | ------------------------------------- |
+| `read_file`  | file_path, line_offset?, line_limit?                   | Read file with line numbers           |
+| `find_files` | query, max_results?                                    | Fuzzy-search file paths in the index  |
+| `list_dir`   | path, max_depth?, skip_dotfiles?                       | List directory entries from the index |
+| `grep`       | pattern, root?, glob?, case_insensitive?, max_results? | Content search via ripgrep            |
 
 ## FsToolset API
 
