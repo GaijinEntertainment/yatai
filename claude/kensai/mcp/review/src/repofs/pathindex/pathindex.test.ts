@@ -284,7 +284,7 @@ describe("PathIndex.new", () => {
 		expect(ix.length).toBe(4);
 	});
 
-	it("includes all files without exclusions", async () => {
+	it("excludes .git directory", async () => {
 		await createFiles(tempDir, [
 			"src/main.go",
 			".git/HEAD",
@@ -293,16 +293,9 @@ describe("PathIndex.new", () => {
 			".hidden",
 		]);
 		const ix = await PathIndex.new(tempDir);
-		expect(ix.paths).toEqual(
-			expect.arrayContaining([
-				"src/main.go",
-				".git/HEAD",
-				".git/objects/ab/cdef",
-				"node_modules/lib/index.js",
-				".hidden",
-			]),
-		);
-		expect(ix.length).toBe(5);
+		expect(ix.paths).toEqual(expect.arrayContaining(["src/main.go", "node_modules/lib/index.js", ".hidden"]));
+		expect(ix.paths.filter((p) => p.startsWith(".git/"))).toHaveLength(0);
+		expect(ix.length).toBe(3);
 	});
 
 	it("returns paths in sorted order", async () => {
