@@ -5,14 +5,14 @@ registry internally; the session toolset orchestrates when these tools are avail
 
 ## Tools
 
-| Tool              | Args                                                | Purpose                            |
-| ----------------- | --------------------------------------------------- | ---------------------------------- |
-| `finding_surface` | dimension, title, description, severity?, location? | Record a finding                   |
-| `surface_clean`   | dimension, notes?                                   | Report a clean dimension           |
-| `finding_cancel`  | finding_id, reason?                                 | Retract a finding                  |
-| `finding_verdict` | finding_id, verdict, reason                         | Verdict: confirmed or rejected     |
-| `findings_list`   | dimension?, status?                                 | List findings with optional filter |
-| `finding_get`     | finding_id                                          | Get a single finding               |
+| Tool              | Args                                              | Purpose                            |
+| ----------------- | ------------------------------------------------- | ---------------------------------- |
+| `finding_surface` | dimension, location, concern, evidence, severity  | Record a finding                   |
+| `surface_clean`   | dimension, notes?                                 | Report a clean dimension           |
+| `finding_cancel`  | finding_id, reason?                               | Retract a finding                  |
+| `finding_verdict` | finding_id, verdict, reason, severity?, blocking? | Verdict: confirmed or rejected     |
+| `findings_list`   | dimension?, status?                               | List findings with optional filter |
+| `finding_get`     | finding_id                                        | Get a single finding               |
 
 ## FindingsToolset API
 

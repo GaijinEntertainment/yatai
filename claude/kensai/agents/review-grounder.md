@@ -130,7 +130,7 @@ Call `mcp__kensai__grounding_store` with:
 - `intent` — author's stated intent from commit message or task spec
 - `hotspots` — areas that warrant focused attention in later review phases: complex logic, risky patterns,
   under-documented behavior, areas where the three layers diverge
-- `blind_spots` — what was intentionally NOT explored and why: files skipped because no dependency edge, call chains
+- `blindspots` — what was intentionally NOT explored and why: files skipped because no dependency edge, call chains
   not traced beyond a certain depth, areas where uncertainty remains
 
 Then call `mcp__kensai__grounding_complete`.

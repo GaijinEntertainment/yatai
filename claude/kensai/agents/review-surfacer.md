@@ -152,7 +152,7 @@ Per concern, call `mcp__kensai__finding_surface`:
 
 If clean, call `mcp__kensai__surface_clean`:
 - `dimension` — your review dimension
-- `summary` — what you checked and why it's sound
+- `notes` — (optional) what you checked and why it's sound
 
 ## Completing
 

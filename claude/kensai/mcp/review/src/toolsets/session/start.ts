@@ -12,7 +12,7 @@ export interface StartContext {
 
 const inputSchema = z.object({
 	root: z.string().describe("Absolute path to the repository root."),
-	mode: z.enum(["committed", "uncommitted", "all"]).optional().describe("Review mode. Defaults to committed."),
+	mode: z.enum(["committed", "uncommitted", "all"]).optional().describe("Review mode. Defaults to uncommitted."),
 });
 
 type Input = z.infer<typeof inputSchema>;
@@ -21,12 +21,12 @@ async function handle(ctx: StartContext, args: Input) {
 	if (ctx.getSession()) return err("Session already active. Call session_end first.");
 
 	try {
-		await ctx.start(args.root, args.mode ?? "committed");
+		await ctx.start(args.root, args.mode ?? "uncommitted");
 	} catch (error) {
 		return errFrom(error);
 	}
 
-	return ok(`Session started: root=${args.root}, mode=${args.mode ?? "committed"}`);
+	return ok(`Session started: root=${args.root}, mode=${args.mode ?? "uncommitted"}`);
 }
 
 /** session_start tool — initializes a review session for a git repository. */
