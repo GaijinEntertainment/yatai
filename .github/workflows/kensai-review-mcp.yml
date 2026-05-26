@@ -1,0 +1,58 @@
+name: Kensai Review MCP
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "claude/kensai/mcp/review/**"
+      - ".github/workflows/kensai-review-mcp.yml"
+  pull_request:
+    paths:
+      - "claude/kensai/mcp/review/**"
+      - ".github/workflows/kensai-review-mcp.yml"
+
+defaults:
+  run:
+    working-directory: claude/kensai/mcp/review
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: claude/kensai/mcp/review/package.json
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "26"
+          cache: pnpm
+          cache-dependency-path: claude/kensai/mcp/review/pnpm-lock.yaml
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm lint
+
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: ["lts/*", "26"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: claude/kensai/mcp/review/package.json
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: pnpm
+          cache-dependency-path: claude/kensai/mcp/review/pnpm-lock.yaml
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm test
