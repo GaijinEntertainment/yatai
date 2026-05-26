@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 import type { IndexEntry } from "../../repofs/pathindex/pathindex.ts";
-import { formatSuggestions, ok, suggestPaths } from "../result.ts";
+import { errFrom, formatSuggestions, ok, suggestPaths } from "../result.ts";
 import type { ToolContext, ToolRegistrar } from "../types.ts";
 
 const DEFAULT_MAX_DEPTH = 1;
@@ -31,8 +31,12 @@ function handle(ctx: ToolContext, args: Input) {
 	const dir = rfs.index.dir(dirPath);
 
 	if (!dir) {
-		if (rfs.fileExists(dirPath)) {
-			return ok(`[${dirPath}: is a file, not a directory (use read_file instead)]`);
+		try {
+			if (rfs.fileExists(dirPath)) {
+				return ok(`[${dirPath}: is a file, not a directory (use read_file instead)]`);
+			}
+		} catch (error) {
+			return errFrom(error);
 		}
 		return ok(`[directory not found: ${dirPath}]${formatSuggestions(suggestPaths(rfs, dirPath))}`);
 	}
@@ -103,7 +107,7 @@ export function listDirTool(ctx: ToolContext): ToolRegistrar {
 						"  - You want to read a file's contents -> read_file.",
 						"",
 						"Behaviour:",
-						`  - Default max_depth is ${DEFAULT_MAX_DEPTH} (directory itself only). Pass max_depth N to descend N levels.`,
+						`  - Default max_depth is ${DEFAULT_MAX_DEPTH} (direct children only). Pass max_depth N to descend N levels.`,
 						`  - Total entries capped at ${DEFAULT_MAX_ENTRIES}. Truncation marker names the cap that fired.`,
 						'  - Dotfiles shown by default; skip_dotfiles=true omits "."-prefixed entries.',
 						`  - Descent suppressed for: ${EXCLUDE_DIRS.join(", ")}. The entry itself is still listed.`,

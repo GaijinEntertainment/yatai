@@ -46,7 +46,7 @@ export function logTool(ctx: ToolContext): ToolRegistrar {
 						"",
 						"Behaviour:",
 						`  - One line per commit: "- <short-sha> <subject>". Short SHA is ${SHORT_SHA} characters.`,
-						`  - count null or non-positive -> ${DEFAULT_COUNT}. Header reports total count.`,
+						`  - Omit count for default ${DEFAULT_COUNT}. Header reports total count.`,
 						"  - Trailing entries dropped with truncation marker when body exceeds render budget.",
 						"",
 						"Constraints:",

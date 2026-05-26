@@ -87,8 +87,12 @@ async function handle(ctx: ToolContext, args: Input) {
 
 	const rfs = ctx.rfs();
 
-	if (rfs.dirExists(args.file_path)) {
-		return ok(`[${args.file_path}: is a directory, not a file (use list_dir instead)]`);
+	try {
+		if (rfs.dirExists(args.file_path)) {
+			return ok(`[${args.file_path}: is a directory, not a file (use list_dir instead)]`);
+		}
+	} catch (error) {
+		return errFrom(error);
 	}
 
 	let buf: Buffer;
