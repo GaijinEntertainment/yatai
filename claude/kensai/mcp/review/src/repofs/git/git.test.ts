@@ -199,7 +199,7 @@ describe("Repo", () => {
 	});
 
 	afterAll(async () => {
-		await rm(repoDir, { recursive: true, force: true });
+		await rm(repoDir, { recursive: true, force: true, maxRetries: 3 });
 	});
 
 	it("open rejects non-repo directory", async () => {
@@ -207,7 +207,7 @@ describe("Repo", () => {
 		try {
 			await expect(Repo.open(nonRepo)).rejects.toThrow(GitError);
 		} finally {
-			await rm(nonRepo, { recursive: true, force: true });
+			await rm(nonRepo, { recursive: true, force: true, maxRetries: 3 });
 		}
 	});
 
@@ -314,7 +314,7 @@ describe("Repo with binary files", () => {
 	});
 
 	afterAll(async () => {
-		await rm(repoDir, { recursive: true, force: true });
+		await rm(repoDir, { recursive: true, force: true, maxRetries: 3 });
 	});
 
 	it("changedFiles reports binary with dash counts", async () => {
@@ -351,7 +351,7 @@ describe("Repo log with multi-line messages", () => {
 	});
 
 	afterAll(async () => {
-		await rm(repoDir, { recursive: true, force: true });
+		await rm(repoDir, { recursive: true, force: true, maxRetries: 3 });
 	});
 
 	it("parses subject and body separately", async () => {

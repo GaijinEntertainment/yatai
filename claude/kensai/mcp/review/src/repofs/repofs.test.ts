@@ -41,7 +41,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-	await rm(rootDir, { recursive: true, force: true });
+	await rm(rootDir, { recursive: true, force: true, maxRetries: 3 });
 });
 
 describe("RepoFs.open", () => {

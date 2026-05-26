@@ -129,7 +129,7 @@ describe("grep", () => {
 	});
 
 	afterAll(async () => {
-		await rm(testDir, { recursive: true, force: true });
+		await rm(testDir, { recursive: true, force: true, maxRetries: 3 });
 	});
 
 	it("finds matches across files", async () => {

@@ -261,7 +261,7 @@ describe("PathIndex.new", () => {
 	});
 
 	afterEach(async () => {
-		await rm(tempDir, { recursive: true });
+		await rm(tempDir, { recursive: true, maxRetries: 3 });
 	});
 
 	it("empty directory", async () => {
