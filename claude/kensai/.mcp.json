@@ -3,8 +3,7 @@
     "kensai": {
       "type": "stdio",
       "command": "npx",
-      "args": ["@gaijin/kensai-review-mcp"],
-      "alwaysLoad": true
+      "args": ["-y", "@gaijin/kensai-review-mcp@latest"]
     }
   }
 }
