@@ -64,7 +64,7 @@ export class RepoFs {
 	/** Normalizes any path (absolute or relative) to POSIX relative from root. Throws on escape. */
 	resolve(p: string): string {
 		const abs = path.resolve(this.#root, path.posix.normalize(p.replaceAll("\\", "/")));
-		const rel = path.relative(this.#root, abs);
+		const rel = path.relative(this.#root, abs).replaceAll("\\", "/");
 
 		if (rel.startsWith("..")) {
 			throw new RepoFsError(`path escapes root: ${p}`);

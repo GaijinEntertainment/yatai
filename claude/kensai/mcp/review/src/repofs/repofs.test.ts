@@ -30,7 +30,7 @@ beforeAll(async () => {
 	await writeFile(join(rootDir, "empty.txt"), "");
 	await writeFile(join(rootDir, "image.png"), Buffer.from([0x89, 0x50, 0x4e, 0x47]));
 
-	await symlink("/tmp", join(rootDir, "escape-link"));
+	await symlink(tmpdir(), join(rootDir, "escape-link"));
 	await symlink(join(rootDir, "src/main.ts"), join(rootDir, "link-to-file"));
 
 	await git(["init"], rootDir);
@@ -72,6 +72,14 @@ describe("resolve", () => {
 
 	it("normalizes redundant segments", () => {
 		expect(rfs.resolve("src/../README.md")).toBe("README.md");
+	});
+
+	it("normalizes backslash separators", () => {
+		expect(rfs.resolve("src\\main.ts")).toBe("src/main.ts");
+	});
+
+	it("normalizes mixed separators", () => {
+		expect(rfs.resolve("src\\nested/deep.ts")).toBe("src/nested/deep.ts");
 	});
 
 	it("accepts absolute path inside root", () => {
