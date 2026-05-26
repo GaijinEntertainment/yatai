@@ -7,7 +7,7 @@ export interface EndContext {
 }
 
 function handle(ctx: EndContext) {
-	if (!ctx.getSession()) return err("No active session.");
+	if (!ctx.getSession()) return err("[no active session]");
 	ctx.end();
 	return ok("Session ended.");
 }

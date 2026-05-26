@@ -10,11 +10,11 @@ Response format: LLMXML (pseudo-XML optimized for LLM consumption) — see `src/
 **Toolsets as providers.** Each toolset defines its own tools internally and exposes them via a `tools()` method
 returning `ToolRegistrar[]`. Toolsets are domain-scoped: session, fs, git, findings.
 
-**SessionToolset as binder.** A single `bind(server)` call registers all tools — session tools (always enabled) and
-dependant toolset tools (start disabled). No separate registry class; SessionToolset IS the registry.
+**SessionToolset as binder.** A single `bind(server)` call registers all tools — all start enabled for subagent MCP
+tool propagation. No separate registry class; SessionToolset IS the registry.
 
-**Dynamic tool visibility.** Dependant tools are hidden from MCP tool listing via `RegisteredTool.disable()` until a
-session is active. The SDK auto-sends `tools/list_changed` notifications on enable/disable.
+**Handler-level phase enforcement.** All tools are visible from registration. Session-dependent tools guard via
+`#require()` which throws a descriptive error pre-session. `#sync()` gates visibility after session lifecycle events.
 
 **Declarative state sync.** On session lifecycle events, `#enabledTools()` computes the full desired set of enabled tool
 names, and `#sync()` converges — enables what should be on, disables what should be off. No incremental tracking.
@@ -50,11 +50,11 @@ src/
 └── toolsets/                 — one folder per toolset, one file per tool
     ├── types.ts              — ToolRegistrar, ToolContext, SessionDependant
     ├── result.ts             — ok(), err(), errFrom() response helpers
-    ├── session/              — session lifecycle + phase transitions (13 tools)
+    ├── session/              — session lifecycle + phase transitions (12 tools)
     │   ├── toolset.ts        — SessionToolset (binder, sync, lifecycle)
     │   ├── start.ts          — session_start
     │   ├── state.ts          — session_state
-    │   ├── priming.ts        — session_priming (multi-block context delivery)
+    │   ├── priming.ts        — session_priming (paginated context delivery)
     │   ├── end.ts            — session_end
     │   ├── observation_*.ts  — create, cancel
     │   ├── grounding_*.ts    — store, get, complete
@@ -114,7 +114,7 @@ Git:
 
 Context delivery:
 
-- [x] **session_priming** — multi-block priming (metadata, changed files, file stats, diffs)
+- [x] **session_priming** — paginated priming (metadata, changed files, file stats, agent-instructions, diffs)
 
 Findings:
 
@@ -136,7 +136,7 @@ Phase transitions:
 
 ### Phase 3: Tool visibility and response formatting
 
-- [x] **Tool visibility** — only `session_start` visible before session; all tools enabled after start
+- [x] **Tool visibility** — all tools start enabled (for subagent propagation); handler-level phase enforcement via `#require()`
 - [x] **Response formatting** — plain text for fs/git (Go conventions), LLMXML for session/findings/grounding
 - [x] **Soft errors** — not-found/binary/empty return `ok("[marker]")` with path suggestions, not `err()`
 - [x] **Extended descriptions** — each tool documents behaviour, alternatives, constraints (under 2KB cap)

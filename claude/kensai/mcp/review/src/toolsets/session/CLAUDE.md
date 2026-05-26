@@ -5,17 +5,20 @@ tools plus all dependant toolset tools to the MCP server.
 
 ## Tools
 
-| Tool                 | Args         | Purpose                                        |
-| -------------------- | ------------ | ---------------------------------------------- |
-| `session_start`      | root, mode?  | Fat init: RepoFs, PathIndex, git context       |
-| `session_state`      | —            | Current session info                           |
-| `session_end`        | —            | Clear dependants, destroy session              |
-| `grounding_store`    | key, content | Persist grounding context                      |
-| `grounding_get`      | key?         | Retrieve grounding context                     |
-| `grounding_complete` | —            | GROUNDING -> SURFACING                         |
-| `surfacing_complete` | —            | SURFACING -> PROVING (or FILING if 0 findings) |
-| `proving_complete`   | —            | PROVING -> FILING                              |
-| `filing_complete`    | —            | FILING -> COMPLETE                             |
+| Tool                 | Args                                      | Purpose                                        |
+| -------------------- | ----------------------------------------- | ---------------------------------------------- |
+| `session_start`      | root, mode?                               | Fat init: RepoFs, PathIndex, git context       |
+| `session_state`      | —                                         | Current session info                           |
+| `session_priming`    | page?                                     | Paginated full context delivery                |
+| `session_end`        | —                                         | Clear dependants, destroy session              |
+| `observation_create` | summary, detail, location?, category?     | Record observation during grounding            |
+| `observation_cancel` | observation_id, reason?                   | Retract an observation                         |
+| `grounding_store`    | summary, integration_surface, intent, ... | Persist grounding context                      |
+| `grounding_get`      | —                                         | Retrieve grounding context                     |
+| `grounding_complete` | —                                         | GROUNDING -> SURFACING                         |
+| `surfacing_complete` | —                                         | SURFACING -> PROVING (or FILING if 0 findings) |
+| `proving_complete`   | —                                         | PROVING -> FILING                              |
+| `filing_complete`    | —                                         | FILING -> COMPLETE                             |
 
 ## Review Modes
 
