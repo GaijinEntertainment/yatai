@@ -19,11 +19,11 @@ threading from lead to agents.
 
 ## Environment
 
-Agent teams: !`echo ${CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS:-disabled}`
+Agent teams: !`printenv CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS`
 
 ## Prerequisites
 
-1. If agent teams shows `disabled` above, stop and tell the user:
+1. If `printenv` above is blank or `TeamCreate` tool is not available, stop and tell the user:
 
    > Agent teams required. Add to settings:
    >
