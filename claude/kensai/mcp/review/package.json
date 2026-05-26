@@ -1,6 +1,6 @@
 {
 	"name": "@gaijin/kensai-review-mcp",
-	"version": "0.1.0",
+	"version": "0.1.1",
 	"description": "Stateful MCP server for the kensai multi-agent code review pipeline",
 	"license": "MIT",
 	"author": {
