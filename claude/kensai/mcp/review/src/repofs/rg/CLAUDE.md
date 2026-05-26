@@ -24,7 +24,8 @@ Foundation for the `search-grep` tool.
 - `--max-columns` + `--max-columns-preview` for line truncation
 - `--color=never` for parseable output
 - `--path-separator /` for cross-platform path consistency
-- rg binary check runs once per process, cached via singleton promise
+- rg binary bundled via `@vscode/ripgrep` — no PATH dependency
+- Binary check runs once per process, cached via singleton promise
 - 50 MiB max buffer for large outputs
 - Exit code 1 (no matches) → valid empty result, not an error
 
@@ -44,5 +45,6 @@ Leading `./` is stripped. Output is truncated to `maxResults` non-separator line
 
 ## Dependencies
 
+- `@vscode/ripgrep` (bundled rg binary path)
 - `node:child_process` (execFile)
 - `node:path` (resolve)

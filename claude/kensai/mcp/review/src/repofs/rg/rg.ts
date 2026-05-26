@@ -1,6 +1,8 @@
 import { execFile } from "node:child_process";
 import { resolve } from "node:path";
 
+import { rgPath } from "@vscode/ripgrep";
+
 const MAX_BUFFER = 50 * 1024 * 1024;
 const DEFAULT_MAX_RESULTS = 100;
 const DEFAULT_CONTEXT_LINES = 5;
@@ -115,9 +117,9 @@ function ensureRgCli(): Promise<void> {
 
 async function checkRgCli(): Promise<void> {
 	try {
-		await runExecFile("rg", ["--version"]);
+		await runExecFile(rgPath, ["--version"]);
 	} catch (err) {
-		throw new RgError("rg (ripgrep) binary not found in PATH; install ripgrep", { cause: err as Error });
+		throw new RgError(`rg (ripgrep) binary not executable at ${rgPath}`, { cause: err as Error });
 	}
 }
 
@@ -177,7 +179,7 @@ export async function grep(
 
 	let stdout: string;
 	try {
-		stdout = await runExecFile("rg", args, { cwd: absRoot, signal });
+		stdout = await runExecFile(rgPath, args, { cwd: absRoot, signal });
 	} catch (err) {
 		if (err instanceof RgError) {
 			const cause = err.cause as { code?: number | string } | undefined;
