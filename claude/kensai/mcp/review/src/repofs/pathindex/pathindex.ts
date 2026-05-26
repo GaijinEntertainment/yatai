@@ -8,6 +8,142 @@ import picomatch from "picomatch";
 
 import { ErrBinaryContent, LineIter } from "../lineiter/lineiter.ts";
 
+/** Directory names skipped during filesystem walk. Never descended into. */
+const WALK_EXCLUDE_DIRS: ReadonlySet<string> = new Set([".git"]);
+
+/** Extensions treated as binary without opening the file. Stat-only — no line counting, no fd consumed. */
+const BINARY_EXTENSIONS: ReadonlySet<string> = new Set([
+	// Images
+	".png",
+	".jpg",
+	".jpeg",
+	".gif",
+	".bmp",
+	".ico",
+	".svg",
+	".webp",
+	".tiff",
+	".tif",
+	".psd",
+	".dds",
+	".tga",
+	".hdr",
+	".exr",
+	".ktx",
+	".ktx2",
+	".astc",
+	".pvr",
+	".basis",
+	// Audio
+	".wav",
+	".mp3",
+	".ogg",
+	".flac",
+	".aac",
+	".wma",
+	".m4a",
+	".opus",
+	// Video
+	".mp4",
+	".avi",
+	".mkv",
+	".mov",
+	".wmv",
+	".webm",
+	".flv",
+	// 3D / geometry
+	".fbx",
+	".obj",
+	".gltf",
+	".glb",
+	".blend",
+	".dae",
+	".3ds",
+	".stl",
+	".usd",
+	".usda",
+	".usdc",
+	".usdz",
+	// Compiled / binary
+	".exe",
+	".dll",
+	".so",
+	".dylib",
+	".o",
+	".a",
+	".lib",
+	".pdb",
+	".wasm",
+	".class",
+	".jar",
+	".pyc",
+	".pyo",
+	// Archives
+	".zip",
+	".tar",
+	".gz",
+	".bz2",
+	".xz",
+	".7z",
+	".rar",
+	".zst",
+	".lz4",
+	// Fonts
+	".ttf",
+	".otf",
+	".woff",
+	".woff2",
+	".eot",
+	// Documents / data
+	".pdf",
+	".doc",
+	".docx",
+	".xls",
+	".xlsx",
+	".ppt",
+	".pptx",
+	".sqlite",
+	".db",
+	".mdb",
+	// Game engine assets (general)
+	".bin",
+	".pak",
+	".dat",
+	".res",
+	".asset",
+	".bundle",
+	".bank",
+	".bsp",
+	".nav",
+	".lightmap",
+	".cubemap",
+	".mdl",
+	".vtf",
+	".vpk",
+	".pck",
+	// Compiled shaders
+	".spv",
+	".cso",
+	".dxbc",
+	".metallib",
+	// Unreal Engine
+	".uasset",
+	".umap",
+	".ubulk",
+	".upk",
+	// Audio middleware (FMOD / Wwise)
+	".fsb",
+	".fev",
+	".bnk",
+	// Dagor Engine
+	".dag",
+	".dynmodel",
+	".rendinst",
+	".composit",
+	".gameobj",
+	".lod",
+]);
+
 export type IndexEntryFile = {
 	type: "file";
 	name: string;
@@ -168,6 +304,8 @@ export class PathIndex {
 		const work: Promise<void>[] = [];
 
 		for (const dirent of dirEntries) {
+			if (WALK_EXCLUDE_DIRS.has(dirent.name)) continue;
+
 			const relPath = path.join(dir, dirent.name);
 			const absPath = nativePath.join(this.absRoot, relPath);
 
@@ -194,21 +332,41 @@ export class PathIndex {
 				continue;
 			}
 
-			work.push(
-				Promise.all([fs.stat(absPath), this.#countLines(absPath)]).then(([s, lc]) => {
-					const entry: IndexEntryFile = {
-						type: "file",
-						name: dirent.name,
-						size: s.size,
-						lineCount: lc.lineCount,
-						maxLineLen: lc.maxLineLen,
-						isBinary: lc.isBinary,
-					};
-					dirEntry.children.push(entry);
-					this.paths.push(relPath);
-					this.#entries.set(relPath, entry);
-				}),
-			);
+			const ext = path.extname(dirent.name).toLowerCase();
+
+			if (BINARY_EXTENSIONS.has(ext)) {
+				work.push(
+					fs.stat(absPath).then((s) => {
+						const entry: IndexEntryFile = {
+							type: "file",
+							name: dirent.name,
+							size: s.size,
+							lineCount: 0,
+							maxLineLen: 0,
+							isBinary: true,
+						};
+						dirEntry.children.push(entry);
+						this.paths.push(relPath);
+						this.#entries.set(relPath, entry);
+					}),
+				);
+			} else {
+				work.push(
+					Promise.all([fs.stat(absPath), this.#countLines(absPath)]).then(([s, lc]) => {
+						const entry: IndexEntryFile = {
+							type: "file",
+							name: dirent.name,
+							size: s.size,
+							lineCount: lc.lineCount,
+							maxLineLen: lc.maxLineLen,
+							isBinary: lc.isBinary,
+						};
+						dirEntry.children.push(entry);
+						this.paths.push(relPath);
+						this.#entries.set(relPath, entry);
+					}),
+				);
+			}
 		}
 
 		await Promise.all(work);
