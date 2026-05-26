@@ -32,7 +32,7 @@ export class SessionToolset {
 	}
 
 	#require(): Session {
-		if (!this.#session) throw new Error("No active session");
+		if (!this.#session) throw new Error("[no active session — call session_start first]");
 		return this.#session;
 	}
 

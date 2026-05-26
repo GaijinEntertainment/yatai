@@ -54,40 +54,69 @@ default model is sufficient.
 ### Phase 1: Grounding
 
 1. Create a team. Spawn a `review-grounder` teammate. No data in spawn prompt — grounder calls
-   `mcp__kensai__session_priming` to get metadata, changed files, file stats, and all diffs.
+   `mcp__kensai__session_priming` to get metadata, changed files, file stats, agent-instructions, and diffs.
 2. Wait for grounder to complete. Grounder stores structured context via MCP and calls `mcp__kensai__grounding_complete`.
 3. **Shut down the grounder.**
 
 ### Phase 2: Surfacing
 
 1. Read grounding from `mcp__kensai__grounding_get` — summary, integration surface, hotspots, blind spots, intent.
-2. Derive **surfacing dimensions** from the grounding — as many as the change warrants. Each dimension is a **review
-   discipline** — a type of review, not an investigation question. Each surfacer performs a different kind of review:
-   design, integration, correctness, completeness, etc.
+2. Derive **surfacing dimensions** from grounding — each dimension names a **specific risk area this change introduces**,
+   not a generic review category. The dimension tells the surfacer WHERE to focus; the surfacer decides WHAT to find.
 
-   Examples of review disciplines (non-exhaustive — derive from the change's nature):
-   - "Design review" — architecture, patterns, abstractions, separation of concerns
-   - "Integration review" — API contracts, caller migration, cross-boundary compatibility
-   - "Correctness review" — data fidelity, type safety, invariant preservation
-   - "Completeness review" — coverage of all affected sites, missing updates, dead code
+   Derivation process:
+   - Read grounding hotspots. Each hotspot is a candidate dimension or feeds into one.
+   - Read the integration surface. Cross-boundary touchpoints suggest dimensions.
+   - Name the dimension after the RISK, not after a review discipline.
 
-   **Bad dimensions** are focused investigation questions that pre-bias the surfacer:
-   - "tri_ref_t round-trip through damage model stash/reconstruct path" — names the exact code path
-   - "iterateNodeFaces uint16_t->uint32_t widening -- consumer completeness" — tells what to find
+   <examples>
+   <example>
+   <type>Good dimensions (derived from specific change)</type>
+   <good>
+   For a change that replaces FRT with BVH and widens uint16 to uint32:
+   - "uint16-to-uint32 widening across 30+ consumer call sites"
+   - "BVH trace semantic parity with FRT canonical implementation"
+   - "legacy binary format parse-and-discard correctness"
+   </good>
+   </example>
 
-   The test: does this dimension name a type of review, or does it name what the surfacer should find?
+   <example>
+   <type>Good dimensions (derived from a pagination + doc change)</type>
+   <good>
+   - "pagination boundary correctness — block splitting, oversized blocks, page footer"
+   - "documentation accuracy after behavioral changes — tool visibility, naming, counts"
+   </good>
+   </example>
+
+   <example>
+   <type>Bad dimensions (generic review categories)</type>
+   <bad>
+   - "Correctness review" — every review checks correctness; this doesn't focus the surfacer
+   - "Integration review" — too broad; says nothing about what integration risks THIS change has
+   - "Completeness review" — generic; the surfacer doesn't know what completeness means for this change
+   - "Design review" — applicable to any change; doesn't leverage grounding
+   </bad>
+   </example>
+
+   <example>
+   <type>Bad dimensions (investigation questions)</type>
+   <bad>
+   - "tri_ref_t round-trip through damage model" — names the exact code path to check
+   - "iterateNodeFaces uint16_t widening — consumer completeness" — tells what to find
+   </bad>
+   </example>
+   </examples>
+
+   **Self-check before spawning:** if you could copy the same dimension name to a different change and it would still
+   make sense, the dimension is too generic. Rewrite it using terms from the grounding.
 
 3. Create a task per dimension. Spawn `review-surfacer` teammates in parallel — one per dimension. Spawn prompt includes
-   the discipline name and **quality criteria** — broad focus points derived from grounding. Not a methodology — a short
-   list of patterns to watch for, categories of risk relevant to the change's nature.
-
-   Quality criteria are broad: "watch for implicit narrowing at type boundaries", "check that renamed APIs propagate to
-   all consumer sites." NOT specific: "check how X packs into bits 48-63", "verify file.cpp:555 applies the right
-   transform."
+   the dimension name and **quality criteria** — broad focus points derived from grounding hotspots. Not a methodology —
+   a short list of risk patterns the surfacer should watch for.
 
 4. **Always spawn one additional general-review surfacer** alongside the dimension surfacers. No prescribed dimension or
    quality criteria. Spawn prompt: "General review -- no prescribed dimension. Follow any thread. Focus on behavioral
-   regressions: semantic contracts, coordinate spaces, filtering semantics, lifecycle guarantees, concurrency."
+   regressions: semantic contracts, lifecycle guarantees, concurrency, and anything the dimension surfacers might miss."
 
 5. Wait for all surfacers. They record findings and call `mcp__kensai__surface_clean` or
    `mcp__kensai__finding_surface` via MCP.

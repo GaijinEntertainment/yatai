@@ -21,8 +21,8 @@ grounding, surfacing, proving, filing — with dedicated agents per phase.
 
 | Component | Purpose |
 |-----------|---------|
-| `mcp/review/src/index.ts` | MCP server — phase state machine, context persistence, phase-gated tools |
-| `skills/review/SKILL.md` | `/review` entry point — mode/path resolution, pipeline orchestration |
+| `mcp/review/src/index.ts` | MCP server — phase state machine, context persistence, handler-level phase enforcement |
+| `skills/review/SKILL.md` | `/kensai-review` entry point — mode/path resolution, pipeline orchestration |
 | `agents/review-grounder.md` | Grounding agent — maps the change, builds three-layer model, stores context via MCP |
 | `agents/review-surfacer.md` | Surfacing agent — parallel read-only reviewer per dimension, records findings via MCP |
 | `agents/review-prover.md` | Proving agent — adversarial falsification of surfaced findings, verdicts via MCP |
@@ -35,7 +35,7 @@ grounding, surfacing, proving, filing — with dedicated agents per phase.
 |------|---------|
 | `session_start` | Initialize session (IDLE -> GROUNDING) |
 | `session_state` | Current phase, mode, refs, file/finding counts |
-| `session_priming` | Full context: metadata, changed files, file stats, agent-instructions, all diffs (multi-block) |
+| `session_priming` | Paginated full context: metadata, changed files, file stats, agent-instructions, diffs. Call with `page=N` for large changes. |
 | `session_end` | Destroy session |
 
 ### Filesystem and search (session-scoped)

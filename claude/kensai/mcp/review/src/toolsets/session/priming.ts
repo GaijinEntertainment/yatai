@@ -14,6 +14,7 @@ export interface PrimingContext {
 
 const COLLAPSED_PREFIXES = ["vendor/", "node_modules/", "dist/", "build/", "__pycache__/", ".git/"];
 const PAGE_BUDGET = 350_000;
+const BLOCK_CAP = 480_000;
 const FOOTER_RESERVE = 200;
 
 const inputSchema = z.object({
@@ -63,19 +64,26 @@ function buildAllBlocks(s: Session, base: string, head: string): string[] {
 	return blocks;
 }
 
+function capBlock(block: string): string {
+	if (block.length <= BLOCK_CAP) return block;
+	const marker = "\n\n[content truncated — file too large for priming, use diff_file to read in full]";
+	return block.slice(0, BLOCK_CAP - marker.length) + marker;
+}
+
 function paginate(blocks: string[], budget: number): string[][] {
 	const pages: string[][] = [];
 	let current: string[] = [];
 	let used = 0;
 
 	for (const block of blocks) {
-		if (current.length > 0 && used + block.length > budget) {
+		const capped = capBlock(block);
+		if (current.length > 0 && used + capped.length > budget) {
 			pages.push(current);
 			current = [];
 			used = 0;
 		}
-		current.push(block);
-		used += block.length;
+		current.push(capped);
+		used += capped.length;
 	}
 
 	if (current.length > 0) {
