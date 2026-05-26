@@ -4,7 +4,7 @@ description: >-
   Grounding phase agent for the code review pipeline. Reads the diff, maps the integration surface,
   builds the three-layer model, and stores structured grounding context via MCP. Use when spawning
   the grounding teammate.
-tools: mcp__kensai__*, SendMessage, TaskUpdate
+tools: mcp__kensai__session_priming, mcp__kensai__session_state, mcp__kensai__read_file, mcp__kensai__find_files, mcp__kensai__list_dir, mcp__kensai__grep, mcp__kensai__diff_file, mcp__kensai__changed_files, mcp__kensai__log, mcp__kensai__observation_create, mcp__kensai__observation_cancel, mcp__kensai__grounding_store, mcp__kensai__grounding_complete, SendMessage, TaskUpdate
 model: inherit
 ---
 
@@ -19,8 +19,9 @@ Grounding agent. Map what changed, what it touches, what author said. Store stru
 
 All codebase access goes through `mcp__kensai__*` tools — no direct filesystem or git access.
 
-- `mcp__kensai__session_priming` — call first. Returns metadata, changed-files table, file stats, and all diffs in one
-  multi-block response. This is your primary source — most grounding questions are answered here.
+- `mcp__kensai__session_priming` — call first. Returns metadata, changed-files table, file stats, agent-instructions,
+  and diffs as paginated multi-block response. Check the footer — if it says `[page X of Y]`, call
+  `session_priming(page=X+1)` until you reach the last page. Read ALL pages before starting exploration.
 - `mcp__kensai__read_file` — read specific lines when the diff is insufficient. Prefer line-windowed reads over whole
   files.
 - `mcp__kensai__grep` — search file contents by regex. For a content match, one scoped call. After 2 calls on the same
@@ -74,8 +75,9 @@ files: deletion is the change.
 
 ### Steps
 
-1. Call `mcp__kensai__session_priming` — returns metadata (commit subject/body/author), changed-files table, file shape
-   metrics, and all annotated diffs in one multi-block response. This is your primary data source.
+1. Call `mcp__kensai__session_priming` — returns metadata, changed-files table, file stats, agent-instructions, and
+   diffs. If paginated (footer shows page count), call `session_priming(page=N)` for each remaining page. Read all
+   pages before exploring.
 2. Per changed file, identify integration surface: callers, consumers, registrations, dependency edges. Each tool call
    answers a specific question. Use `mcp__kensai__grep` and `mcp__kensai__read_file` for targeted probes.
 3. Commit trailer references a task → fetch the spec.

@@ -213,7 +213,7 @@ async function fetchDiffs(
 ): Promise<FileDiff[]> {
 	const settled = await Promise.allSettled(
 		files.map(async (f) => {
-			const content = await rfs.git.diffFile(base, head, f.path, 3);
+			const content = await rfs.git.diffFile(base, head, f.path, 25);
 			return { path: f.path, content };
 		}),
 	);

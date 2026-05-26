@@ -27,17 +27,17 @@ tools plus all dependant toolset tools to the MCP server.
 
 ## SessionToolset API
 
-| Method                    | Purpose                                            |
-| ------------------------- | -------------------------------------------------- |
-| `constructor(dependants)` | Accept SessionDependant toolsets                   |
-| `bind(server)`            | Register all tools; dependant tools start disabled |
-| `session` (getter)        | Current session or null                            |
+| Method                    | Purpose                                                                  |
+| ------------------------- | ------------------------------------------------------------------------ |
+| `constructor(dependants)` | Accept SessionDependant toolsets                                         |
+| `bind(server)`            | Register all tools (start enabled); #sync() gates after lifecycle events |
+| `session` (getter)        | Current session or null                                                  |
 
 ## Internals
 
 - `#ownTools()` — creates session tool registrars with context callbacks
 - `#sync()` — converges tool visibility to match `#enabledTools()` result
-- `#enabledTools()` — own tools always enabled; dependant tools enabled when session active
+- `#enabledTools()` — all tools when session active; only `session_start` when no session
 
 ## Tool File Pattern
 

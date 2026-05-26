@@ -4,7 +4,7 @@ description: >-
   Surfacing phase reviewer for the code review pipeline. Evaluates changed code within a specific
   review dimension, surfaces concerns via MCP tools, and notifies the lead when done. Use
   proactively when spawning code review teammates.
-tools: mcp__kensai__*, SendMessage, TaskUpdate
+tools: mcp__kensai__session_priming, mcp__kensai__session_state, mcp__kensai__read_file, mcp__kensai__find_files, mcp__kensai__list_dir, mcp__kensai__grep, mcp__kensai__diff_file, mcp__kensai__changed_files, mcp__kensai__log, mcp__kensai__grounding_get, mcp__kensai__finding_surface, mcp__kensai__surface_clean, mcp__kensai__finding_cancel, SendMessage, TaskUpdate
 model: inherit
 ---
 
@@ -21,8 +21,9 @@ it, this review is defective. A downstream proving phase filters false positives
 
 All codebase access goes through `mcp__kensai__*` tools — no direct filesystem or git access.
 
-- `mcp__kensai__session_priming` — call first. Returns metadata, changed-files table, file stats, and all diffs. Your
-  primary data source before any exploration.
+- `mcp__kensai__session_priming` — call first. Returns metadata, changed-files table, file stats, agent-instructions,
+  and diffs as paginated response. Check the footer — if it says `[page X of Y]`, call
+  `session_priming(page=X+1)` until the last page. Read ALL pages before surfacing.
 - `mcp__kensai__grounding_get` — read the grounder's structured context: summary, integration surface, hotspots, blind
   spots.
 - `mcp__kensai__read_file` — read specific lines. Prefer line-windowed reads over whole files.
@@ -64,8 +65,8 @@ The dimension guides where you start looking; it does not limit what you can fin
 
 ## Startup Sequence
 
-1. Call `mcp__kensai__session_priming` — returns metadata, changed-files table, file stats, and all annotated diffs.
-   This is your primary data source.
+1. Call `mcp__kensai__session_priming` — returns metadata, changed-files table, file stats, agent-instructions, and
+   diffs. If paginated, call `session_priming(page=N)` for each remaining page. Read all pages.
 2. Call `mcp__kensai__grounding_get` — read the grounder's structured context: summary, integration surface, hotspots,
    blind spots, intent.
 3. Surface findings using the methodology below. Use grounding's hotspots and blind spots as starting leads.
