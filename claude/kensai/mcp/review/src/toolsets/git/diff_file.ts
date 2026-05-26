@@ -22,8 +22,12 @@ async function handle(ctx: ToolContext, args: Input) {
 	const header = `path: ${args.path}\nbase: ${base}\nhead: ${headLabel}\n`;
 
 	const rfs = ctx.rfs();
-	if (!rfs.fileExists(args.path) && !session.changedFiles.some((f) => f.path === args.path)) {
-		return ok(`[file not found: ${args.path}]${formatSuggestions(suggestPaths(rfs, args.path))}`);
+	try {
+		if (!rfs.fileExists(args.path) && !session.changedFiles.some((f) => f.path === args.path)) {
+			return ok(`[file not found: ${args.path}]${formatSuggestions(suggestPaths(rfs, args.path))}`);
+		}
+	} catch (error) {
+		return errFrom(error);
 	}
 
 	try {

@@ -21,8 +21,12 @@ async function handle(ctx: ToolContext, args: Input) {
 	const rfs = ctx.rfs();
 	const root = args.root?.trim() || ".";
 
-	if (root !== "." && !rfs.fileExists(root) && !rfs.dirExists(root)) {
-		return ok(`[root not found: ${root}]${formatSuggestions(suggestPaths(rfs, root))}`);
+	try {
+		if (root !== "." && !rfs.fileExists(root) && !rfs.dirExists(root)) {
+			return ok(`[root not found: ${root}]${formatSuggestions(suggestPaths(rfs, root))}`);
+		}
+	} catch (error) {
+		return errFrom(error);
 	}
 
 	try {
