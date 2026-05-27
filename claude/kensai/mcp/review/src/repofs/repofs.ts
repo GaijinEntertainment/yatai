@@ -3,7 +3,7 @@ import path from "node:path";
 
 import { Repo } from "./git/git.ts";
 import type { FilterOptions } from "./pathindex/pathindex.ts";
-import { PathIndex } from "./pathindex/pathindex.ts";
+import { PathIndex, WALK_EXCLUDE_DIRS } from "./pathindex/pathindex.ts";
 import type { GrepOptions, GrepResult } from "./rg/rg.ts";
 import { grep } from "./rg/rg.ts";
 
@@ -92,6 +92,10 @@ export class RepoFs {
 		const absPath = path.resolve(this.#root, rel);
 
 		if (!entry) {
+			const firstSegment = rel.split("/")[0];
+			if (firstSegment && WALK_EXCLUDE_DIRS.has(firstSegment)) {
+				throw new RepoFsError(`file not found: ${rel}`);
+			}
 			const stat = await fsp.stat(absPath).catch(() => null);
 			if (!stat?.isFile()) {
 				throw new RepoFsError(`file not found: ${rel}`);

@@ -9,7 +9,7 @@ import picomatch from "picomatch";
 import { ErrBinaryContent, LineIter } from "../lineiter/lineiter.ts";
 
 /** Directory names skipped during filesystem walk. Never descended into. */
-const WALK_EXCLUDE_DIRS: ReadonlySet<string> = new Set([".git"]);
+export const WALK_EXCLUDE_DIRS: ReadonlySet<string> = new Set([".git"]);
 
 /** Extensions treated as binary without opening the file. Stat-only — no line counting, no fd consumed. */
 const BINARY_EXTENSIONS: ReadonlySet<string> = new Set([
@@ -152,7 +152,7 @@ export type IndexEntryFile = {
 	lineCount: number;
 	/** Byte length of the longest line (excluding `\n`). 0 for binary/empty files. */
 	maxLineLen: number;
-	/** True when the file's leading bytes contain a null byte. */
+	/** Extension-based hint. Content-based detection (null byte probe) runs at read/scan time. */
 	isBinary: boolean;
 };
 
