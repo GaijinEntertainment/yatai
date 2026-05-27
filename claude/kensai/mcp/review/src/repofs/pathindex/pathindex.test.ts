@@ -4,7 +4,7 @@ import { dirname, join } from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
-import { PathIndex, validateGlobs } from "./pathindex.ts";
+import { PathIndex, countFileLines, validateGlobs } from "./pathindex.ts";
 import type { IndexEntryDir, IndexEntryFile, IndexEntrySymlink } from "./pathindex.ts";
 
 describe("PathIndex", () => {
@@ -321,32 +321,21 @@ describe("PathIndex.new", () => {
 		expect(ix.get("nonexistent")).toBeUndefined();
 	});
 
-	it("counts lines in text files", async () => {
+	it("index is stat-only — lineCount and maxLineLen are zero", async () => {
 		await writeFile(join(tempDir, "three.txt"), "one\ntwo\nthree\n");
-		await writeFile(join(tempDir, "no-trailing.txt"), "one\ntwo");
 		const ix = await PathIndex.new(tempDir);
-		const three = ix.get("three.txt") as IndexEntryFile;
-		const noTrailing = ix.get("no-trailing.txt") as IndexEntryFile;
-		expect(three.lineCount).toBe(3);
-		expect(three.isBinary).toBe(false);
-		expect(noTrailing.lineCount).toBe(2);
-		expect(noTrailing.isBinary).toBe(false);
-	});
-
-	it("tracks max line length", async () => {
-		await writeFile(join(tempDir, "varied.txt"), "short\na longer line here\nhi\n");
-		const ix = await PathIndex.new(tempDir);
-		const entry = ix.get("varied.txt") as IndexEntryFile;
-		expect(entry.maxLineLen).toBe(Buffer.byteLength("a longer line here"));
-	});
-
-	it("detects binary files", async () => {
-		await writeFile(join(tempDir, "binary.bin"), Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x00, 0x0a, 0x1a]));
-		const ix = await PathIndex.new(tempDir);
-		const entry = ix.get("binary.bin") as IndexEntryFile;
-		expect(entry.isBinary).toBe(true);
+		const entry = ix.get("three.txt") as IndexEntryFile;
 		expect(entry.lineCount).toBe(0);
 		expect(entry.maxLineLen).toBe(0);
+		expect(entry.isBinary).toBe(false);
+	});
+
+	it("detects binary by extension", async () => {
+		await writeFile(join(tempDir, "image.png"), Buffer.from([0x89, 0x50, 0x4e, 0x47]));
+		await writeFile(join(tempDir, "code.ts"), "const x = 1;\n");
+		const ix = await PathIndex.new(tempDir);
+		expect((ix.get("image.png") as IndexEntryFile).isBinary).toBe(true);
+		expect((ix.get("code.ts") as IndexEntryFile).isBinary).toBe(false);
 	});
 
 	it("handles empty files", async () => {
@@ -399,5 +388,43 @@ describe("PathIndex.new", () => {
 		const ix = await PathIndex.new(tempDir);
 		const root = ix.dir(".")!;
 		expect(root.children.map((c) => c.name).sort()).toEqual(["README.md", "lib", "main.go", "src"]);
+	});
+});
+
+describe("countFileLines", () => {
+	let tempDir: string;
+
+	beforeEach(async () => {
+		tempDir = await mkdtemp(join(tmpdir(), "countlines-"));
+	});
+
+	afterEach(async () => {
+		await rm(tempDir, { recursive: true, maxRetries: 3 });
+	});
+
+	it("counts lines in text file", async () => {
+		await writeFile(join(tempDir, "three.txt"), "one\ntwo\nthree\n");
+		const result = await countFileLines(join(tempDir, "three.txt"));
+		expect(result.lineCount).toBe(3);
+		expect(result.isBinary).toBe(false);
+	});
+
+	it("tracks max line length", async () => {
+		await writeFile(join(tempDir, "varied.txt"), "short\na longer line here\nhi\n");
+		const result = await countFileLines(join(tempDir, "varied.txt"));
+		expect(result.maxLineLen).toBe(Buffer.byteLength("a longer line here"));
+	});
+
+	it("detects binary content", async () => {
+		await writeFile(join(tempDir, "bin"), Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x00, 0x0a]));
+		const result = await countFileLines(join(tempDir, "bin"));
+		expect(result.isBinary).toBe(true);
+		expect(result.lineCount).toBe(0);
+	});
+
+	it("handles file without trailing newline", async () => {
+		await writeFile(join(tempDir, "no-nl.txt"), "one\ntwo");
+		const result = await countFileLines(join(tempDir, "no-nl.txt"));
+		expect(result.lineCount).toBe(2);
 	});
 });
