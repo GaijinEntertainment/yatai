@@ -1,6 +1,6 @@
 {
   "mcpServers": {
-    "kensai": {
+    "review": {
       "type": "stdio",
       "command": "npx",
       "args": ["-y", "@gaijin/kensai-review-mcp@latest"]
