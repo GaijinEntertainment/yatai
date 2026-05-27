@@ -1,6 +1,8 @@
 import { createHash } from "node:crypto";
+import path from "node:path";
 
 import type { GitFileStat, GitLogEntry } from "../repofs/git/git.ts";
+import { countFileLines } from "../repofs/pathindex/pathindex.ts";
 import { RepoFs } from "../repofs/repofs.ts";
 import { FindingsStorage } from "./findings-storage.ts";
 import { GroundingStorage } from "./grounding-storage.ts";
@@ -82,11 +84,11 @@ export class Session {
 			mode !== "uncommitted" ? rfs.git.log("HEAD", 1).then((entries) => entries[0] ?? null) : Promise.resolve(null),
 		]);
 
-		const manifest = buildManifest(rfs, changedFiles);
 		const reviewable = filterReviewableFiles(changedFiles);
 		const changedPaths = new Set(changedFiles.map((f) => f.path));
 
-		const [diffs, instructions] = await Promise.all([
+		const [manifest, diffs, instructions] = await Promise.all([
+			buildManifest(rfs, changedFiles),
 			fetchDiffs(rfs, base, head, reviewable),
 			resolveInstructions(
 				rfs,
@@ -179,26 +181,38 @@ export function filterReviewableFiles(files: readonly GitFileStat[]): GitFileSta
 	return files.filter((f) => f.status !== "deleted" && !shouldSkipDiff(f.path));
 }
 
-/** Builds per-file shape metrics from PathIndex for all non-deleted changed files. No I/O — index is pre-built. */
-function buildManifest(rfs: RepoFs, files: readonly GitFileStat[]): ManifestEntry[] {
-	const entries: ManifestEntry[] = [];
+/** Builds per-file shape metrics for all non-deleted changed files. Counts lines on demand (only for changed files). */
+async function buildManifest(rfs: RepoFs, files: readonly GitFileStat[]): Promise<ManifestEntry[]> {
+	const candidates: Array<{ path: string; entry: { size: number; isBinary: boolean } }> = [];
 
 	for (const f of files) {
 		if (f.status === "deleted") continue;
-
 		const entry = rfs.index.get(f.path);
 		if (!entry || entry.type !== "file") continue;
-
-		entries.push({
-			path: f.path,
-			bytes: entry.size,
-			lines: entry.lineCount,
-			maxLineLen: entry.maxLineLen,
-			binary: entry.isBinary,
-		});
+		candidates.push({ path: f.path, entry });
 	}
 
-	return entries;
+	const results = await Promise.all(
+		candidates.map(async ({ path: filePath, entry }) => {
+			if (entry.isBinary) {
+				return { path: filePath, bytes: entry.size, lines: 0, maxLineLen: 0, binary: true };
+			}
+			try {
+				const lc = await countFileLines(path.resolve(rfs.root, filePath));
+				return {
+					path: filePath,
+					bytes: entry.size,
+					lines: lc.lineCount,
+					maxLineLen: lc.maxLineLen,
+					binary: lc.isBinary,
+				};
+			} catch {
+				return { path: filePath, bytes: entry.size, lines: 0, maxLineLen: 0, binary: false };
+			}
+		}),
+	);
+
+	return results;
 }
 
 /**

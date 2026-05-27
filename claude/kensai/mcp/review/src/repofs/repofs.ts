@@ -44,7 +44,6 @@ export class RepoFs {
 		}
 
 		const [index, git] = await Promise.all([PathIndex.new(absRoot, signal), Repo.open(absRoot, signal)]);
-
 		return new RepoFs(absRoot, index, git);
 	}
 
@@ -81,22 +80,26 @@ export class RepoFs {
 		return this.#index.dir(this.resolve(p)) !== undefined;
 	}
 
-	/** Resolves path, validates file entry in index, returns raw bytes. */
+	/** Resolves path, validates via index or filesystem, returns raw bytes. Falls through to direct read for files not in the index. */
 	async readFile(p: string): Promise<Buffer> {
 		const rel = this.resolve(p);
 		const entry = this.#index.get(rel);
 
-		if (!entry) {
-			throw new RepoFsError(`file not found: ${rel}`);
-		}
-
-		if (entry.type !== "file") {
+		if (entry && entry.type !== "file") {
 			throw new RepoFsError(`${rel}: not a regular file (${entry.type})`);
 		}
 
-		this.#pendingReadPaths.push(rel);
+		const absPath = path.resolve(this.#root, rel);
 
-		return fsp.readFile(path.resolve(this.#root, rel));
+		if (!entry) {
+			const stat = await fsp.stat(absPath).catch(() => null);
+			if (!stat?.isFile()) {
+				throw new RepoFsError(`file not found: ${rel}`);
+			}
+		}
+
+		this.#pendingReadPaths.push(rel);
+		return fsp.readFile(absPath);
 	}
 
 	/** Fuzzy search via {@link PathIndex.fuzzySearch}. */

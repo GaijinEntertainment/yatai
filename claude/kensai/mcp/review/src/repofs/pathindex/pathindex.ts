@@ -192,7 +192,6 @@ export class PathIndex {
 	readonly root: IndexEntryDir = { type: "dir", name: "", children: [] };
 	readonly paths: string[] = [];
 	readonly #entries = new Map<string, IndexEntry>();
-	readonly #fdPool = new Pool(256);
 
 	private constructor(rootPath: string) {
 		this.absRoot = nativePath.resolve(rootPath);
@@ -332,41 +331,21 @@ export class PathIndex {
 				continue;
 			}
 
-			const ext = path.extname(dirent.name).toLowerCase();
-
-			if (BINARY_EXTENSIONS.has(ext)) {
-				work.push(
-					fs.stat(absPath).then((s) => {
-						const entry: IndexEntryFile = {
-							type: "file",
-							name: dirent.name,
-							size: s.size,
-							lineCount: 0,
-							maxLineLen: 0,
-							isBinary: true,
-						};
-						dirEntry.children.push(entry);
-						this.paths.push(relPath);
-						this.#entries.set(relPath, entry);
-					}),
-				);
-			} else {
-				work.push(
-					Promise.all([fs.stat(absPath), this.#countLines(absPath)]).then(([s, lc]) => {
-						const entry: IndexEntryFile = {
-							type: "file",
-							name: dirent.name,
-							size: s.size,
-							lineCount: lc.lineCount,
-							maxLineLen: lc.maxLineLen,
-							isBinary: lc.isBinary,
-						};
-						dirEntry.children.push(entry);
-						this.paths.push(relPath);
-						this.#entries.set(relPath, entry);
-					}),
-				);
-			}
+			work.push(
+				fs.stat(absPath).then((s) => {
+					const entry: IndexEntryFile = {
+						type: "file",
+						name: dirent.name,
+						size: s.size,
+						lineCount: 0,
+						maxLineLen: 0,
+						isBinary: BINARY_EXTENSIONS.has(path.extname(dirent.name).toLowerCase()),
+					};
+					dirEntry.children.push(entry);
+					this.paths.push(relPath);
+					this.#entries.set(relPath, entry);
+				}),
+			);
 		}
 
 		await Promise.all(work);
@@ -395,57 +374,27 @@ export class PathIndex {
 			return undefined;
 		}
 	}
-
-	/** Body-less line scan via {@link LineIter}. Binary files are detected by the null byte probe on the first chunk. */
-	async #countLines(absPath: string): Promise<{ lineCount: number; maxLineLen: number; isBinary: boolean }> {
-		await this.#fdPool.acquire();
-		const stream = createReadStream(absPath);
-		try {
-			const iter = await LineIter.new(stream, { lineCap: 0 });
-			let maxLineLen = 0;
-			while (await iter.next()) {
-				if (iter.len() > maxLineLen) maxLineLen = iter.len();
-			}
-			return { lineCount: iter.num(), maxLineLen, isBinary: false };
-		} catch (err) {
-			if (err instanceof ErrBinaryContent) {
-				return { lineCount: 0, maxLineLen: 0, isBinary: true };
-			}
-			throw err;
-		} finally {
-			stream.destroy();
-			this.#fdPool.release();
-		}
-	}
 }
 
-/** Bounds concurrent async operations. {@link acquire} blocks when the limit is reached. */
-class Pool {
-	readonly #limit: number;
-	#active = 0;
-	#queue: (() => void)[] = [];
-
-	constructor(limit: number) {
-		this.#limit = limit;
-	}
-
-	/** Take a slot. Returns a promise that resolves when a slot is available. */
-	acquire(): Promise<void> | void {
-		if (this.#active < this.#limit) {
-			this.#active++;
-			return;
+/** Count lines, detect binary, and measure max line length for a single file. */
+export async function countFileLines(
+	absPath: string,
+): Promise<{ lineCount: number; maxLineLen: number; isBinary: boolean }> {
+	const stream = createReadStream(absPath);
+	try {
+		const iter = await LineIter.new(stream, { lineCap: 0 });
+		let maxLineLen = 0;
+		while (await iter.next()) {
+			if (iter.len() > maxLineLen) maxLineLen = iter.len();
 		}
-		return new Promise<void>((resolve) => this.#queue.push(resolve));
-	}
-
-	/** Return a slot. Wakes the next waiter if any. */
-	release(): void {
-		const next = this.#queue.shift();
-		if (next) {
-			next();
-		} else {
-			this.#active--;
+		return { lineCount: iter.num(), maxLineLen, isBinary: false };
+	} catch (err) {
+		if (err instanceof ErrBinaryContent) {
+			return { lineCount: 0, maxLineLen: 0, isBinary: true };
 		}
+		throw err;
+	} finally {
+		stream.destroy();
 	}
 }
 
