@@ -6,22 +6,22 @@ Single entry point for all filesystem and search operations within a project roo
 
 ## API
 
-| Export                           | Purpose                                                          |
-| -------------------------------- | ---------------------------------------------------------------- |
-| `RepoFs.open(root, signal?)`     | Async factory. Builds file index and validates git in parallel   |
-| `.root`                          | Absolute path to repository root                                 |
-| `.git`                           | `Repo` instance for git operations                               |
-| `.index`                         | `PathIndex` instance — O(1) lookup, fuzzy search, glob filter    |
-| `.resolve(path)`                 | Normalize any path to POSIX relative from root. Throws on escape |
-| `.fileExists(path)`              | Check file existence via index                                   |
-| `.dirExists(path)`               | Check directory existence via index                              |
-| `.readFile(path, opts?)`         | Read text file with binary detection, line windowing, byte cap   |
-| `.listDir(path, opts?)`          | List directory entries from index tree with depth control        |
-| `.findFiles(pattern, opts?)`     | Fuzzy search file paths via PathIndex                            |
-| `.globFiles(opts?)`              | Glob-filter indexed paths via PathIndex                          |
-| `.grep(pattern, opts?, signal?)` | Content search via ripgrep scoped to root                        |
-| `.flushReadPaths()`              | Return and clear paths from successful readFile calls            |
-| `RepoFsError`                    | Error class for scoped filesystem failures                       |
+| Export                           | Purpose                                                                                                                                   |
+| -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `RepoFs.open(root, signal?)`     | Async factory. Builds gitignore-aware index (pure filesystem walk) and validates git in parallel                                          |
+| `.root`                          | Absolute path to repository root                                                                                                          |
+| `.git`                           | `Repo` instance for git operations                                                                                                        |
+| `.index`                         | `PathIndex` instance — O(1) lookup, fuzzy search, glob filter. Gitignore-filtered walk; review layer reconciles changed files via `add()` |
+| `.resolve(path)`                 | Normalize any path to POSIX relative from root. Throws on escape                                                                          |
+| `.fileExists(path)`              | Check file existence via index                                                                                                            |
+| `.dirExists(path)`               | Check directory existence via index                                                                                                       |
+| `.readFile(path, opts?)`         | Read text file with binary detection, line windowing, byte cap                                                                            |
+| `.listDir(path, opts?)`          | List directory entries from index tree with depth control                                                                                 |
+| `.findFiles(pattern, opts?)`     | Fuzzy search file paths via PathIndex                                                                                                     |
+| `.globFiles(opts?)`              | Glob-filter indexed paths via PathIndex                                                                                                   |
+| `.grep(pattern, opts?, signal?)` | Content search via ripgrep scoped to root                                                                                                 |
+| `.flushReadPaths()`              | Return and clear paths from successful readFile calls                                                                                     |
+| `RepoFsError`                    | Error class for scoped filesystem failures                                                                                                |
 
 ## Path Resolution
 
@@ -81,7 +81,9 @@ Entries sorted by name within each level. Excluded directories are listed but no
 
 `resolve()` prevents path escape via textual containment: `path.relative(root, abs)` must not
 start with `..`. Symlinks are safe because PathIndex does not traverse them — symlinked entries
-appear in the index with `type: "symlink"` and `readFile` rejects them by type.
+appear in the index with `type: "symlink"` and `readFile` rejects them by type. The `readFile`
+fallback for unindexed paths uses `lstat` and rejects non-regular files, so a gitignored symlink
+cannot bypass containment.
 
 ## Dependencies
 

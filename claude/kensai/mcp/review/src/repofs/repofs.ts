@@ -31,7 +31,7 @@ export class RepoFs {
 		this.#git = git;
 	}
 
-	/** Builds the file index and validates git in parallel. */
+	/** Builds the file index (gitignore-aware walk) and validates git in parallel. */
 	static async open(root: string, signal?: AbortSignal): Promise<RepoFs> {
 		const absRoot = path.resolve(root);
 
@@ -96,14 +96,18 @@ export class RepoFs {
 			if (firstSegment && WALK_EXCLUDE_DIRS.has(firstSegment)) {
 				throw new RepoFsError(`file not found: ${rel}`);
 			}
-			const stat = await fsp.stat(absPath).catch(() => null);
+			// lstat, not stat — a symlink outside the index must not be readable through
+			// the fallback, or it would bypass path containment.
+			const stat = await fsp.lstat(absPath).catch(() => null);
 			if (!stat?.isFile()) {
 				throw new RepoFsError(`file not found: ${rel}`);
 			}
 		}
 
 		this.#pendingReadPaths.push(rel);
-		return fsp.readFile(absPath);
+		const buf = await fsp.readFile(absPath);
+		if (entry) entry.size = buf.length;
+		return buf;
 	}
 
 	/** Fuzzy search via {@link PathIndex.fuzzySearch}. */
