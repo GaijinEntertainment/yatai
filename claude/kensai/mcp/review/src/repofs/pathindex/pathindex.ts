@@ -153,10 +153,6 @@ export type IndexEntryFile = {
 	name: string;
 	/** Byte size. Null until lazily filled — by a full read ({@link RepoFs.readFile}) or a manifest stat. */
 	size: number | null;
-	/** Total number of lines. 0 for binary files. */
-	lineCount: number;
-	/** Byte length of the longest line (excluding `\n`). 0 for binary/empty files. */
-	maxLineLen: number;
 	/** Extension-based hint. Content-based detection (null byte probe) runs at read/scan time. */
 	isBinary: boolean;
 };
@@ -218,8 +214,6 @@ export class PathIndex {
 				type: "file",
 				name: path.basename(p),
 				size: null,
-				lineCount: 0,
-				maxLineLen: 0,
 				isBinary: false,
 			});
 		}
@@ -311,8 +305,6 @@ export class PathIndex {
 						type: "file",
 						name: path.basename(p),
 						size: stat.size,
-						lineCount: 0,
-						maxLineLen: 0,
 						isBinary: BINARY_EXTENSIONS.has(path.extname(p).toLowerCase()),
 					},
 				];
@@ -407,8 +399,6 @@ export class PathIndex {
 				type: "file",
 				name: dirent.name,
 				size: null,
-				lineCount: 0,
-				maxLineLen: 0,
 				isBinary: BINARY_EXTENSIONS.has(path.extname(dirent.name).toLowerCase()),
 			};
 			dirEntry.children.push(entry);

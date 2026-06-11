@@ -318,15 +318,6 @@ describe("PathIndex.new", () => {
 		expect(ix.get("nonexistent")).toBeUndefined();
 	});
 
-	it("index is stat-only — lineCount and maxLineLen are zero", async () => {
-		await writeFile(join(tempDir, "three.txt"), "one\ntwo\nthree\n");
-		const ix = await PathIndex.new(tempDir);
-		const entry = ix.get("three.txt") as IndexEntryFile;
-		expect(entry.lineCount).toBe(0);
-		expect(entry.maxLineLen).toBe(0);
-		expect(entry.isBinary).toBe(false);
-	});
-
 	it("detects binary by extension", async () => {
 		await writeFile(join(tempDir, "image.png"), Buffer.from([0x89, 0x50, 0x4e, 0x47]));
 		await writeFile(join(tempDir, "code.ts"), "const x = 1;\n");
@@ -339,8 +330,7 @@ describe("PathIndex.new", () => {
 		await writeFile(join(tempDir, "empty.txt"), "");
 		const ix = await PathIndex.new(tempDir);
 		const entry = ix.get("empty.txt") as IndexEntryFile;
-		expect(entry.lineCount).toBe(0);
-		expect(entry.maxLineLen).toBe(0);
+		expect(entry.size).toBeNull();
 		expect(entry.isBinary).toBe(false);
 	});
 
