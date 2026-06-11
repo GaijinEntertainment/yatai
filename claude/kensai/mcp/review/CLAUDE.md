@@ -37,7 +37,7 @@ src/
 │   └── CLAUDE.md
 ├── repofs/                   — scoped filesystem facade composing all sub-modules
 │   ├── CLAUDE.md
-│   ├── git/                  — thin git CLI abstraction with diff annotation
+│   ├── git/                  — thin git CLI abstraction with diff annotation; gitignore/ matcher submodule
 │   ├── rg/                   — ripgrep CLI abstraction for content search
 │   ├── pathindex/            — tree-structured file index with fuzzy/glob search
 │   └── lineiter/             — streaming line iterator with pluggable binary detection
