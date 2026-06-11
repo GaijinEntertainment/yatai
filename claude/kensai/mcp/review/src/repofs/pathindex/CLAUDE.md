@@ -21,7 +21,7 @@ Replaces per-call filesystem operations for file lookup, directory listing, and 
 
 Discriminated union on `type`:
 
-- **`file`** — `name`, `size` (bytes; null at build time — lazily filled by `RepoFs.readFile` or manifest stat), `lineCount` / `maxLineLen` (0 at build time — filled on demand via `countFileLines`), `isBinary` (extension-based hint; content probe runs at read/scan time)
+- **`file`** — `name`, `size` (bytes; null at build time — lazily filled by `RepoFs.readFile` or manifest stat), `isBinary` (extension-based hint; content probe runs at read/scan time). Line metrics are not stored — `countFileLines` computes them on demand
 - **`dir`** — `name`, `children: IndexEntry[]`
 - **`symlink`** — `name`, `target` (raw readlink), `targetType`, `size` (target's size if file)
 
@@ -55,8 +55,8 @@ Powered by `picomatch`. Pattern without `/` uses `matchBase` (matches basename a
   from the index (still readable via the `RepoFs.readFile` fallback)
 - Symlinks indexed with target info (readlink + stat) but not followed for recursion; ignore rules match them as files
 - Files are never statted at build — entries are created from the dirent alone. Size is lazily
-  filled (`RepoFs.readFile`, manifest stat); line counting and binary probing are deferred
-  (`countFileLines` on demand)
+  filled (`RepoFs.readFile`, manifest stat); line metrics and content-based binary detection are
+  computed on demand by `countFileLines`, never stored on the entry
 - Paths stored as forward-slash POSIX relative to root
 
 ## Dependencies
