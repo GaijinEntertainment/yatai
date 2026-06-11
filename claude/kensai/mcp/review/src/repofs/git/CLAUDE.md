@@ -2,6 +2,7 @@
 
 Thin abstraction over the local git CLI. Ported from Go `git/repo.go` and `gittoolset/annotate.go`.
 Foundation for `git-diff`, `git-changed-files`, `git-log` tools.
+Contains the `gitignore/` submodule (pattern matching for walk-time filtering) — see its `CLAUDE.md`.
 
 ## API
 
