@@ -1,25 +1,27 @@
 # pathindex
 
-Tree-structured file index with fuzzy and glob search. Built once at session start, immutable after construction.
+Tree-structured file index with fuzzy and glob search. Built once at session start; afterwards entries are only
+enriched — lazy size fills, `add()` reconciliation — never removed or restructured.
 Replaces per-call filesystem operations for file lookup, directory listing, and path suggestions.
 
 ## API
 
-| Method                         | Purpose                                                  |
-| ------------------------------ | -------------------------------------------------------- |
-| `PathIndex.new(root, signal?)` | Async build — parallel walk + stat, symlink detection    |
-| `PathIndex.from(root, paths)`  | Sync build from path strings (trailing `/` = directory)  |
-| `get(path)`                    | O(1) entry lookup by relative path                       |
-| `dir(path)`                    | O(1) directory node lookup                               |
-| `globSearch(opts?)`            | Filter paths by include/exclude globs                    |
-| `fuzzySearch(pattern, opts?)`  | Multi-word fuzzy search with optional glob pre-filtering |
-| `validateGlobs(patterns)`      | Check glob patterns are compilable                       |
+| Method                         | Purpose                                                                                                                                                                              |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `PathIndex.new(root, signal?)` | Async build — gitignore-aware stat-free parallel walk, symlink resolution. Works on any directory tree, git or not                                                                   |
+| `PathIndex.from(root, paths)`  | Sync build from path strings (trailing `/` = directory)                                                                                                                              |
+| `add(relPaths)`                | Insert paths the walk pruned (e.g. changed tracked-but-ignored files, reconciled by the review layer) — lstat-classified, size filled, already-indexed and nonexistent paths skipped |
+| `get(path)`                    | O(1) entry lookup by relative path                                                                                                                                                   |
+| `dir(path)`                    | O(1) directory node lookup                                                                                                                                                           |
+| `globSearch(opts?)`            | Filter paths by include/exclude globs                                                                                                                                                |
+| `fuzzySearch(pattern, opts?)`  | Multi-word fuzzy search with optional glob pre-filtering                                                                                                                             |
+| `validateGlobs(patterns)`      | Check glob patterns are compilable                                                                                                                                                   |
 
 ## Entry Types
 
 Discriminated union on `type`:
 
-- **`file`** — `name`, `size` (bytes), `lineCount` (0 for binary), `maxLineLen` (longest line in bytes, 0 for binary/empty), `isBinary` (null byte in leading 512 bytes)
+- **`file`** — `name`, `size` (bytes; null at build time — lazily filled by `RepoFs.readFile` or manifest stat), `lineCount` / `maxLineLen` (0 at build time — filled on demand via `countFileLines`), `isBinary` (extension-based hint; content probe runs at read/scan time)
 - **`dir`** — `name`, `children: IndexEntry[]`
 - **`symlink`** — `name`, `target` (raw readlink), `targetType`, `size` (target's size if file)
 
@@ -46,13 +48,20 @@ Powered by `picomatch`. Pattern without `/` uses `matchBase` (matches basename a
 ## Walker
 
 - Async recursive with parallel child dispatch (`Promise.all` per directory)
-- Symlinks indexed with target info but not followed for recursion
-- Per file: `stat` (size) and `LineIter` body-less scan (line count + binary detection) run in parallel
-- Binary detection via null byte probe on first 512 bytes — binary files get `lineCount: 0, isBinary: true`
+- Gitignore-aware: each directory's `.gitignore` is parsed and chained onto the parent matcher;
+  `.git/info/exclude` seeds the root chain
+- Ignored files are omitted; ignored directories are pruned without descent — `!` re-inclusion
+  inside a pruned directory is impossible, matching git. Tracked-but-ignored files are absent
+  from the index (still readable via the `RepoFs.readFile` fallback)
+- Symlinks indexed with target info (readlink + stat) but not followed for recursion; ignore rules match them as files
+- Files are never statted at build — entries are created from the dirent alone. Size is lazily
+  filled (`RepoFs.readFile`, manifest stat); line counting and binary probing are deferred
+  (`countFileLines` on demand)
 - Paths stored as forward-slash POSIX relative to root
 
 ## Dependencies
 
 - `fuzzysort` — SublimeText-style fuzzy scoring
 - `picomatch` — glob compilation and matching
-- `lineiter` — body-less line counting and binary detection during walk
+- `../git/gitignore` — walk-time ignore filtering
+- `lineiter` — on-demand line counting and binary detection (`countFileLines`)

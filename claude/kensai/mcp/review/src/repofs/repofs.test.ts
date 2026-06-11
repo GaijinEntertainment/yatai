@@ -172,6 +172,14 @@ describe("readFile", () => {
 		}
 	});
 
+	it("lazily fills index entry size", async () => {
+		const entry = rfs.index.get("src/main.ts");
+		expect(entry?.type).toBe("file");
+		expect((entry as { size: number | null }).size).toBeNull();
+		const buf = await rfs.readFile("src/main.ts");
+		expect((entry as { size: number | null }).size).toBe(buf.length);
+	});
+
 	it("records read paths for flush", async () => {
 		rfs.flushReadPaths();
 		await rfs.readFile("README.md");
@@ -226,5 +234,55 @@ describe("flushReadPaths", () => {
 	it("returns empty when no reads happened", () => {
 		rfs.flushReadPaths();
 		expect(rfs.flushReadPaths()).toEqual([]);
+	});
+});
+
+describe("gitignore filtering and read fallback", () => {
+	let dir: string;
+	let gfs: RepoFs;
+
+	beforeAll(async () => {
+		dir = await mkdtemp(join(tmpdir(), "repofs-gitview-"));
+		await writeFile(join(dir, "tracked.txt"), "a");
+		await writeFile(join(dir, "tracked-ignored.log"), "b");
+		await git(["init"], dir);
+		await git(["-c", "user.name=test", "-c", "user.email=test@test.com", "add", "."], dir);
+		await git(["-c", "user.name=test", "-c", "user.email=test@test.com", "commit", "-m", "init"], dir);
+
+		await writeFile(join(dir, ".gitignore"), "*.log\nignored-link\n");
+		await writeFile(join(dir, "untracked.txt"), "c");
+		await writeFile(join(dir, "untracked-ignored.log"), "d");
+		await symlink("/etc/hosts", join(dir, "ignored-link"));
+
+		gfs = await RepoFs.open(dir);
+	});
+
+	afterAll(async () => {
+		await rm(dir, { recursive: true, force: true, maxRetries: 3 });
+	});
+
+	it("prunes tracked-but-ignored files from the index, still readable via fallback", async () => {
+		expect(gfs.fileExists("tracked-ignored.log")).toBe(false);
+		const buf = await gfs.readFile("tracked-ignored.log");
+		expect(buf.toString("utf-8")).toBe("b");
+	});
+
+	it("excludes ignored untracked files", () => {
+		expect(gfs.fileExists("untracked-ignored.log")).toBe(false);
+	});
+
+	it("includes untracked non-ignored files", () => {
+		expect(gfs.fileExists("untracked.txt")).toBe(true);
+		expect(gfs.fileExists(".gitignore")).toBe(true);
+	});
+
+	it("readFile fallback rejects unindexed symlinks", async () => {
+		expect(gfs.index.get("ignored-link")).toBeUndefined();
+		await expect(gfs.readFile("ignored-link")).rejects.toThrow("file not found");
+	});
+
+	it("readFile fallback still reads ignored regular files", async () => {
+		const buf = await gfs.readFile("untracked-ignored.log");
+		expect(buf.toString("utf-8")).toBe("d");
 	});
 });

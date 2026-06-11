@@ -310,14 +310,11 @@ describe("PathIndex.new", () => {
 		expect(ix.paths).toEqual(["a/b/x.go", "a/y.go", "z.go"]);
 	});
 
-	it("tracks file sizes", async () => {
+	it("does not stat files at build — size is null until lazily filled", async () => {
 		await writeFile(join(tempDir, "small.txt"), "hi");
-		await writeFile(join(tempDir, "big.txt"), "a".repeat(1000));
 		const ix = await PathIndex.new(tempDir);
-		const small = ix.get("small.txt") as IndexEntryFile;
-		const big = ix.get("big.txt") as IndexEntryFile;
-		expect(small.size).toBe(2);
-		expect(big.size).toBe(1000);
+		const entry = ix.get("small.txt") as IndexEntryFile;
+		expect(entry.size).toBeNull();
 		expect(ix.get("nonexistent")).toBeUndefined();
 	});
 
@@ -391,6 +388,100 @@ describe("PathIndex.new", () => {
 	});
 });
 
+describe("PathIndex.new — gitignore", () => {
+	let tempDir: string;
+
+	beforeEach(async () => {
+		tempDir = await mkdtemp(join(tmpdir(), "pathindex-gi-"));
+	});
+
+	afterEach(async () => {
+		await rm(tempDir, { recursive: true, maxRetries: 3 });
+	});
+
+	it("filters files matched by root .gitignore", async () => {
+		await createFiles(tempDir, ["main.go", "debug.log"]);
+		await writeFile(join(tempDir, ".gitignore"), "*.log\n");
+		const ix = await PathIndex.new(tempDir);
+		expect(ix.paths).toEqual([".gitignore", "main.go"]);
+	});
+
+	it("prunes ignored directories without descent", async () => {
+		await createFiles(tempDir, ["src/main.go", "node_modules/lib/index.js", "node_modules/lib/deep/x.js"]);
+		await writeFile(join(tempDir, ".gitignore"), "node_modules/\n");
+		const ix = await PathIndex.new(tempDir);
+		expect(ix.paths.filter((p) => p.startsWith("node_modules"))).toEqual([]);
+		expect(ix.dir("node_modules")).toBeUndefined();
+		expect(ix.paths).toContain("src/main.go");
+	});
+
+	it("nested .gitignore applies only under its directory", async () => {
+		await createFiles(tempDir, ["a.tmp", "sub/b.tmp", "sub/keep.go"]);
+		await writeFile(join(tempDir, "sub/.gitignore"), "*.tmp\n");
+		const ix = await PathIndex.new(tempDir);
+		expect(ix.paths).toContain("a.tmp");
+		expect(ix.paths).not.toContain("sub/b.tmp");
+		expect(ix.paths).toContain("sub/keep.go");
+	});
+
+	it("negation re-includes a previously excluded file", async () => {
+		await createFiles(tempDir, ["debug.log", "keep.log"]);
+		await writeFile(join(tempDir, ".gitignore"), "*.log\n!keep.log\n");
+		const ix = await PathIndex.new(tempDir);
+		expect(ix.paths).not.toContain("debug.log");
+		expect(ix.paths).toContain("keep.log");
+	});
+
+	it("child .gitignore overrides parent patterns", async () => {
+		await createFiles(tempDir, ["top.log", "sub/inner.log"]);
+		await writeFile(join(tempDir, ".gitignore"), "*.log\n");
+		await writeFile(join(tempDir, "sub/.gitignore"), "!inner.log\n");
+		const ix = await PathIndex.new(tempDir);
+		expect(ix.paths).not.toContain("top.log");
+		expect(ix.paths).toContain("sub/inner.log");
+	});
+
+	it("cannot re-include inside a pruned directory", async () => {
+		await createFiles(tempDir, ["build/app.js", "main.go"]);
+		await writeFile(join(tempDir, ".gitignore"), "build/\n!build/app.js\n");
+		const ix = await PathIndex.new(tempDir);
+		expect(ix.paths.filter((p) => p.startsWith("build"))).toEqual([]);
+	});
+
+	it("anchored pattern matches only at its level", async () => {
+		await createFiles(tempDir, ["top.log", "sub/top.log"]);
+		await writeFile(join(tempDir, ".gitignore"), "/top.log\n");
+		const ix = await PathIndex.new(tempDir);
+		expect(ix.paths).not.toContain("top.log");
+		expect(ix.paths).toContain("sub/top.log");
+	});
+
+	it("dir-only pattern does not match a file with the same name", async () => {
+		await createFiles(tempDir, ["build", "src/build/out.js"]);
+		await writeFile(join(tempDir, ".gitignore"), "build/\n");
+		const ix = await PathIndex.new(tempDir);
+		expect(ix.paths).toContain("build");
+		expect(ix.paths.filter((p) => p.startsWith("src/build"))).toEqual([]);
+	});
+
+	it("respects .git/info/exclude", async () => {
+		await createFiles(tempDir, ["main.go", "scratch.txt", ".git/info/exclude"]);
+		await writeFile(join(tempDir, ".git/info/exclude"), "scratch.txt\n");
+		const ix = await PathIndex.new(tempDir);
+		expect(ix.paths).not.toContain("scratch.txt");
+		expect(ix.paths).toContain("main.go");
+	});
+
+	it("ignored symlinks are skipped", async () => {
+		await writeFile(join(tempDir, "real.txt"), "content");
+		await symlink(join(tempDir, "real.txt"), join(tempDir, "link.txt"));
+		await writeFile(join(tempDir, ".gitignore"), "link.txt\n");
+		const ix = await PathIndex.new(tempDir);
+		expect(ix.paths).not.toContain("link.txt");
+		expect(ix.paths).toContain("real.txt");
+	});
+});
+
 describe("countFileLines", () => {
 	let tempDir: string;
 
@@ -426,5 +517,79 @@ describe("countFileLines", () => {
 		await writeFile(join(tempDir, "no-nl.txt"), "one\ntwo");
 		const result = await countFileLines(join(tempDir, "no-nl.txt"));
 		expect(result.lineCount).toBe(2);
+	});
+});
+
+describe("PathIndex.add", () => {
+	let tempDir: string;
+
+	beforeEach(async () => {
+		tempDir = await mkdtemp(join(tmpdir(), "pathindex-add-"));
+	});
+
+	afterEach(async () => {
+		await rm(tempDir, { recursive: true, maxRetries: 3 });
+	});
+
+	it("inserts files pruned by the walk, with size from lstat", async () => {
+		await createFiles(tempDir, ["main.go", "build/out.js"]);
+		await writeFile(join(tempDir, ".gitignore"), "build/\n");
+		const ix = await PathIndex.new(tempDir);
+		expect(ix.get("build/out.js")).toBeUndefined();
+
+		await ix.add(["build/out.js"]);
+		const entry = ix.get("build/out.js") as IndexEntryFile;
+		expect(entry.type).toBe("file");
+		expect(entry.size).toBe(1);
+		expect(ix.dir("build")).toBeDefined();
+	});
+
+	it("keeps paths sorted after insertion", async () => {
+		await createFiles(tempDir, ["m.go", "z.go", "a.log"]);
+		await writeFile(join(tempDir, ".gitignore"), "*.log\n");
+		const ix = await PathIndex.new(tempDir);
+
+		await ix.add(["a.log"]);
+		expect(ix.paths).toEqual([".gitignore", "a.log", "m.go", "z.go"]);
+	});
+
+	it("skips already-indexed paths", async () => {
+		await createFiles(tempDir, ["main.go"]);
+		const ix = await PathIndex.new(tempDir);
+
+		await ix.add(["main.go"]);
+		expect(ix.paths.filter((p) => p === "main.go")).toHaveLength(1);
+	});
+
+	it("skips nonexistent paths and directories", async () => {
+		await createFiles(tempDir, ["sub/file.go"]);
+		const ix = await PathIndex.new(tempDir);
+		const before = [...ix.paths];
+
+		await ix.add(["missing.go", "sub"]);
+		expect(ix.paths).toEqual(before);
+	});
+
+	it("classifies symlinks via lstat", async () => {
+		await writeFile(join(tempDir, "real.txt"), "content");
+		await symlink(join(tempDir, "real.txt"), join(tempDir, "link.txt"));
+		await writeFile(join(tempDir, ".gitignore"), "link.txt\n");
+		const ix = await PathIndex.new(tempDir);
+		expect(ix.get("link.txt")).toBeUndefined();
+
+		await ix.add(["link.txt"]);
+		const entry = ix.get("link.txt") as IndexEntrySymlink;
+		expect(entry.type).toBe("symlink");
+		expect(entry.targetType).toBe("file");
+		expect(entry.size).toBe(7);
+	});
+
+	it("sets binary hint from extension", async () => {
+		await createFiles(tempDir, ["asset.png"]);
+		await writeFile(join(tempDir, ".gitignore"), "*.png\n");
+		const ix = await PathIndex.new(tempDir);
+
+		await ix.add(["asset.png"]);
+		expect((ix.get("asset.png") as IndexEntryFile).isBinary).toBe(true);
 	});
 });

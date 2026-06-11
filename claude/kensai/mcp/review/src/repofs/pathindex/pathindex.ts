@@ -6,10 +6,14 @@ import path from "node:path/posix";
 import fuzzysort from "fuzzysort";
 import picomatch from "picomatch";
 
+import type { Matcher } from "../git/gitignore/gitignore.ts";
+import { parse as parseGitignore } from "../git/gitignore/gitignore.ts";
 import { ErrBinaryContent, LineIter } from "../lineiter/lineiter.ts";
 
 /** Directory names skipped during filesystem walk. Never descended into. */
 export const WALK_EXCLUDE_DIRS: ReadonlySet<string> = new Set([".git"]);
+
+const GITIGNORE_FILE = ".gitignore";
 
 /** Extensions treated as binary without opening the file. Stat-only — no line counting, no fd consumed. */
 const BINARY_EXTENSIONS: ReadonlySet<string> = new Set([
@@ -147,7 +151,8 @@ const BINARY_EXTENSIONS: ReadonlySet<string> = new Set([
 export type IndexEntryFile = {
 	type: "file";
 	name: string;
-	size: number;
+	/** Byte size. Null until lazily filled — by a full read ({@link RepoFs.readFile}) or a manifest stat. */
+	size: number | null;
 	/** Total number of lines. 0 for binary files. */
 	lineCount: number;
 	/** Byte length of the longest line (excluding `\n`). 0 for binary/empty files. */
@@ -202,54 +207,38 @@ export class PathIndex {
 		const ix = new PathIndex(rootPath);
 
 		for (let p of paths.toSorted()) {
-			const segments = p.split("/");
-			let file: string | undefined;
-
 			if (p.endsWith("/")) {
-				segments.pop();
 				p = p.slice(0, -1);
-			} else {
-				file = segments.pop();
+				ix.#ensureParents(p.split("/"));
+				ix.paths.push(p);
+				continue;
 			}
 
-			let parent = ix.root;
-			for (const [i, name] of segments.entries()) {
-				if (!name) continue;
-				const relPath = segments.slice(0, i + 1).join("/");
-				let dir = ix.#entries.get(relPath) as IndexEntryDir | undefined;
-
-				if (!dir) {
-					dir = { type: "dir", name, children: [] };
-					parent.children.push(dir);
-					ix.#entries.set(relPath, dir);
-				}
-
-				parent = dir;
-			}
-
-			if (file) {
-				const entry: IndexEntryFile = {
-					type: "file",
-					name: file,
-					size: 0,
-					lineCount: 0,
-					maxLineLen: 0,
-					isBinary: false,
-				};
-				parent.children.push(entry);
-				ix.#entries.set(p, entry);
-			}
-
-			ix.paths.push(p);
+			ix.#insert(p, {
+				type: "file",
+				name: path.basename(p),
+				size: null,
+				lineCount: 0,
+				maxLineLen: 0,
+				isBinary: false,
+			});
 		}
 
 		return ix;
 	}
 
-	/** Walk the filesystem tree rooted at `rootPath` and return a tree-structured index. */
+	/**
+	 * Walk the filesystem tree rooted at `rootPath` and return a tree-structured index.
+	 *
+	 * Gitignore-aware: `.gitignore` files are loaded per directory and chained hierarchically,
+	 * `.git/info/exclude` seeds the root chain. Ignored files are omitted; ignored directories
+	 * are pruned without descent (re-inclusion via `!` inside a pruned directory is impossible,
+	 * matching git).
+	 */
 	static async new(rootPath: string, signal?: AbortSignal): Promise<PathIndex> {
 		const ix = new PathIndex(rootPath);
-		ix.root.children = (await ix.#walkDir("", signal)).children;
+		const exclude = await readIgnoreFile(nativePath.join(ix.absRoot, ".git", "info", "exclude"), "", null);
+		ix.root.children = (await ix.#walkDir("", exclude, signal)).children;
 		ix.paths.sort();
 		return ix;
 	}
@@ -294,19 +283,102 @@ export class PathIndex {
 		return entry?.type === "dir" ? entry : undefined;
 	}
 
-	/** Parallel recursive walk — all children (subdirs + file stats) dispatched via Promise.all per directory. */
-	async #walkDir(dir: string, signal?: AbortSignal): Promise<IndexEntryDir> {
+	/**
+	 * Inserts paths the walk did not produce — e.g. tracked-but-ignored files from `git ls-files`.
+	 * Each path is lstat-classified: regular files and symlinks are inserted (with size filled
+	 * from the stat), anything else — missing, directories — is skipped, as are paths already
+	 * in the index.
+	 */
+	async add(relPaths: readonly string[]): Promise<void> {
+		const additions = await Promise.all(
+			relPaths.map(async (p): Promise<readonly [string, IndexEntryFile | IndexEntrySymlink] | null> => {
+				if (this.#entries.has(p)) return null;
+
+				const absPath = nativePath.join(this.absRoot, p);
+				const stat = await fs.lstat(absPath).catch(() => null);
+				if (!stat) return null;
+
+				if (stat.isSymbolicLink()) {
+					const entry = await this.#resolveSymlink(absPath, path.basename(p));
+					return entry ? [p, entry] : null;
+				}
+
+				if (!stat.isFile()) return null;
+
+				return [
+					p,
+					{
+						type: "file",
+						name: path.basename(p),
+						size: stat.size,
+						lineCount: 0,
+						maxLineLen: 0,
+						isBinary: BINARY_EXTENSIONS.has(path.extname(p).toLowerCase()),
+					},
+				];
+			}),
+		);
+
+		let inserted = false;
+		for (const a of additions) {
+			if (!a) continue;
+			this.#insert(a[0], a[1]);
+			inserted = true;
+		}
+
+		if (inserted) this.paths.sort();
+	}
+
+	/** Creates missing directory nodes along the segment chain. Returns the innermost directory. */
+	#ensureParents(segments: string[]): IndexEntryDir {
+		let parent = this.root;
+
+		for (const [i, name] of segments.entries()) {
+			if (!name) continue;
+			const relPath = segments.slice(0, i + 1).join("/");
+			let dir = this.#entries.get(relPath) as IndexEntryDir | undefined;
+
+			if (!dir) {
+				dir = { type: "dir", name, children: [] };
+				parent.children.push(dir);
+				this.#entries.set(relPath, dir);
+			}
+
+			parent = dir;
+		}
+
+		return parent;
+	}
+
+	/** Inserts a leaf entry at relPath, creating parent directories as needed. */
+	#insert(relPath: string, entry: IndexEntryFile | IndexEntrySymlink): void {
+		const segments = relPath.split("/");
+		segments.pop();
+		this.#ensureParents(segments).children.push(entry);
+		this.#entries.set(relPath, entry);
+		this.paths.push(relPath);
+	}
+
+	/** Parallel recursive walk — subdirs and symlink resolution dispatched via Promise.all per directory. File entries are created synchronously without stat. */
+	async #walkDir(dir: string, ignore: Matcher | null, signal?: AbortSignal): Promise<IndexEntryDir> {
 		signal?.throwIfAborted();
 
 		const dirEntries = await fs.readdir(nativePath.resolve(this.absRoot, dir), { withFileTypes: true });
 		const dirEntry: IndexEntryDir = { type: "dir", name: path.basename(dir), children: [] };
 		const work: Promise<void>[] = [];
 
+		if (dirEntries.some((d) => d.name === GITIGNORE_FILE && d.isFile())) {
+			ignore = await readIgnoreFile(nativePath.join(this.absRoot, dir, GITIGNORE_FILE), dir, ignore);
+		}
+
 		for (const dirent of dirEntries) {
 			if (WALK_EXCLUDE_DIRS.has(dirent.name)) continue;
 
 			const relPath = path.join(dir, dirent.name);
 			const absPath = nativePath.join(this.absRoot, relPath);
+
+			// Symlinks match as files (isDir false), like git.
+			if (ignore?.match(relPath, dirent.isDirectory())) continue;
 
 			if (dirent.isSymbolicLink()) {
 				work.push(
@@ -323,7 +395,7 @@ export class PathIndex {
 
 			if (dirent.isDirectory()) {
 				work.push(
-					this.#walkDir(relPath, signal).then((subtree) => {
+					this.#walkDir(relPath, ignore, signal).then((subtree) => {
 						dirEntry.children.push(subtree);
 						this.#entries.set(relPath, subtree);
 					}),
@@ -331,21 +403,17 @@ export class PathIndex {
 				continue;
 			}
 
-			work.push(
-				fs.stat(absPath).then((s) => {
-					const entry: IndexEntryFile = {
-						type: "file",
-						name: dirent.name,
-						size: s.size,
-						lineCount: 0,
-						maxLineLen: 0,
-						isBinary: BINARY_EXTENSIONS.has(path.extname(dirent.name).toLowerCase()),
-					};
-					dirEntry.children.push(entry);
-					this.paths.push(relPath);
-					this.#entries.set(relPath, entry);
-				}),
-			);
+			const entry: IndexEntryFile = {
+				type: "file",
+				name: dirent.name,
+				size: null,
+				lineCount: 0,
+				maxLineLen: 0,
+				isBinary: BINARY_EXTENSIONS.has(path.extname(dirent.name).toLowerCase()),
+			};
+			dirEntry.children.push(entry);
+			this.paths.push(relPath);
+			this.#entries.set(relPath, entry);
 		}
 
 		await Promise.all(work);
@@ -374,6 +442,13 @@ export class PathIndex {
 			return undefined;
 		}
 	}
+}
+
+/** Parse an ignore file into a Matcher chained onto `parent`. Absent or unreadable file returns `parent` as-is. */
+async function readIgnoreFile(absPath: string, dir: string, parent: Matcher | null): Promise<Matcher | null> {
+	const content = await fs.readFile(absPath, "utf8").catch(() => null);
+	if (content == null) return parent;
+	return parseGitignore(content, dir).withParent(parent);
 }
 
 /** Count lines, detect binary, and measure max line length for a single file. */

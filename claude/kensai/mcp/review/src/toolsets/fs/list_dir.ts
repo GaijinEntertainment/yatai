@@ -85,7 +85,7 @@ function collect(
 				collect(child.children, rel, maxDepth, currentDepth + 1, skipDotfiles, maxEntries, out, state);
 			}
 		} else if (child.type === "file") {
-			out.push(`${rel} (${child.size} bytes)\n`);
+			out.push(child.size != null ? `${rel} (${child.size} bytes)\n` : `${rel}\n`);
 		} else {
 			out.push(`${rel} -> ${child.target}\n`);
 		}
@@ -111,7 +111,7 @@ export function listDirTool(ctx: ToolContext): ToolRegistrar {
 						`  - Total entries capped at ${DEFAULT_MAX_ENTRIES}. Truncation marker names the cap that fired.`,
 						'  - Dotfiles shown by default; skip_dotfiles=true omits "."-prefixed entries.',
 						`  - Descent suppressed for: ${EXCLUDE_DIRS.join(", ")}. The entry itself is still listed.`,
-						'  - Output: one entry per line. Directories as "path/", files as "path (N bytes)". Sorted alphabetically.',
+						'  - Output: one entry per line. Directories as "path/", files as "path", with "(N bytes)" when size is known. Sorted alphabetically.',
 						"  - Empty directory -> [directory is empty] marker, not a tool error.",
 					].join("\n"),
 					inputSchema,
