@@ -1,6 +1,6 @@
 {
 	"name": "kensai",
-	"version": "0.1.7",
+	"version": "0.1.8",
 	"description": "Multi-agent code review pipeline with adversarial falsification, orchestrated by a stateful MCP server",
 	"author": {
 		"name": "xobotyi",
