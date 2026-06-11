@@ -2,7 +2,7 @@
 
 Streaming pull-style line iterator with pluggable binary detection and per-line byte cap. Ported
 from Go `fstoolset/lineiter`. Consumes an `AsyncIterable<Buffer>` — no internal buffering.
-Foundation for `fs-file-read`.
+Consumed by `countFileLines` (pathindex) for on-demand line metrics and binary detection.
 
 ## API
 
