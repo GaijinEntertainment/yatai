@@ -109,7 +109,15 @@ function normalizeCharClasses(pattern: string): string {
 }
 
 // Gitignore globs match dotfiles and have no brace expansion or extglob syntax.
-const PICOMATCH_OPTIONS: picomatch.PicomatchOptions = { dot: true, nobrace: true, noextglob: true };
+// windows:false keeps backslashes as escape characters on all platforms — picomatch's
+// Windows auto-detection would convert them to path separators, breaking \-escapes.
+// Patterns and matched paths are always POSIX here.
+const PICOMATCH_OPTIONS: picomatch.PicomatchOptions = {
+	dot: true,
+	nobrace: true,
+	noextglob: true,
+	windows: false,
+};
 
 function compileMatcher(isPath: boolean, line: string, dir: string): picomatch.Matcher | null {
 	line = normalizeCharClasses(line);
