@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import fsp from "node:fs/promises";
 import path from "node:path";
 
 import type { GitFileStat, GitLogEntry } from "../repofs/git/git.ts";
@@ -181,9 +182,16 @@ export function filterReviewableFiles(files: readonly GitFileStat[]): GitFileSta
 	return files.filter((f) => f.status !== "deleted" && !shouldSkipDiff(f.path));
 }
 
-/** Builds per-file shape metrics for all non-deleted changed files. Counts lines on demand (only for changed files). */
+/**
+ * Builds per-file shape metrics for all non-deleted changed files. The index is stat-free at
+ * build, so this stats each candidate (filling the entry's lazy size) and counts lines on
+ * demand — only for changed files. Changed files absent from the gitignore-filtered index
+ * (tracked-but-ignored) are reconciled into it first — the diff is the source of truth.
+ */
 async function buildManifest(rfs: RepoFs, files: readonly GitFileStat[]): Promise<ManifestEntry[]> {
-	const candidates: Array<{ path: string; entry: { size: number; isBinary: boolean } }> = [];
+	await rfs.index.add(files.filter((f) => f.status !== "deleted" && !rfs.index.get(f.path)).map((f) => f.path));
+
+	const candidates: Array<{ path: string; entry: { size: number | null; isBinary: boolean } }> = [];
 
 	for (const f of files) {
 		if (f.status === "deleted") continue;
@@ -194,20 +202,20 @@ async function buildManifest(rfs: RepoFs, files: readonly GitFileStat[]): Promis
 
 	const results = await Promise.all(
 		candidates.map(async ({ path: filePath, entry }) => {
+			const absPath = path.resolve(rfs.root, filePath);
+
+			const stat = await fsp.stat(absPath).catch(() => null);
+			if (stat) entry.size = stat.size;
+			const bytes = entry.size ?? 0;
+
 			if (entry.isBinary) {
-				return { path: filePath, bytes: entry.size, lines: 0, maxLineLen: 0, binary: true };
+				return { path: filePath, bytes, lines: 0, maxLineLen: 0, binary: true };
 			}
 			try {
-				const lc = await countFileLines(path.resolve(rfs.root, filePath));
-				return {
-					path: filePath,
-					bytes: entry.size,
-					lines: lc.lineCount,
-					maxLineLen: lc.maxLineLen,
-					binary: lc.isBinary,
-				};
+				const lc = await countFileLines(absPath);
+				return { path: filePath, bytes, lines: lc.lineCount, maxLineLen: lc.maxLineLen, binary: lc.isBinary };
 			} catch {
-				return { path: filePath, bytes: entry.size, lines: 0, maxLineLen: 0, binary: false };
+				return { path: filePath, bytes, lines: 0, maxLineLen: 0, binary: false };
 			}
 		}),
 	);

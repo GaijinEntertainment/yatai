@@ -9,28 +9,28 @@ Stateful domain logic for a review session. `Session` (fat factory + data holder
 Fat `start()` factory — validates git, builds PathIndex, collects diffs and metadata in parallel.
 All data is lossless; tools perform lossy transformations (collapsing, capping, formatting).
 
-| Export                      | Purpose                                                                   |
-| --------------------------- | ------------------------------------------------------------------------- |
-| `Session.start(root, mode)` | Async factory — returns fully populated session                           |
-| `.id`                       | 40-char SHA1 hex, unique per session                                      |
-| `.root`                     | Absolute repo path                                                        |
-| `.mode`                     | `"committed" \| "uncommitted" \| "all"`                                   |
-| `.phase`                    | Current `SessionPhase` — starts at `GROUNDING`                            |
-| `.startedAt`                | Construction timestamp                                                    |
-| `.rfs`                      | `RepoFs` instance                                                         |
-| `.commit`                   | `GitLogEntry \| null` — HEAD commit; null for uncommitted mode            |
-| `.changedFiles`             | All changed files with status and +/- stats                               |
-| `.manifest`                 | Per-file shape metrics (bytes, lines, maxLineLen, binary) from PathIndex  |
-| `.diffs`                    | Per-file unified diffs (3-line context) for reviewable files              |
-| `.instructions`             | Discovered instruction files (CLAUDE.md, AGENTS.md) from directory chains |
-| `.findings`                 | `FindingsStorage` instance                                                |
-| `.grounding`                | `GroundingStorage` instance                                               |
-| `.advance(to)`              | Transition to the given phase — throws `SessionError` if invalid          |
-| `SessionPhase`              | `"GROUNDING" \| "SURFACING" \| "PROVING" \| "FILING" \| "COMPLETE"`       |
-| `ReviewMode`                | `"committed" \| "uncommitted" \| "all"`                                   |
-| `FileDiff`                  | `{ path, content }`                                                       |
-| `ManifestEntry`             | `{ path, bytes, lines, maxLineLen, binary }`                              |
-| `SessionError`              | Error class for session failures                                          |
+| Export                      | Purpose                                                                                                                                                                                                               |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Session.start(root, mode)` | Async factory — returns fully populated session                                                                                                                                                                       |
+| `.id`                       | 40-char SHA1 hex, unique per session                                                                                                                                                                                  |
+| `.root`                     | Absolute repo path                                                                                                                                                                                                    |
+| `.mode`                     | `"committed" \| "uncommitted" \| "all"`                                                                                                                                                                               |
+| `.phase`                    | Current `SessionPhase` — starts at `GROUNDING`                                                                                                                                                                        |
+| `.startedAt`                | Construction timestamp                                                                                                                                                                                                |
+| `.rfs`                      | `RepoFs` instance                                                                                                                                                                                                     |
+| `.commit`                   | `GitLogEntry \| null` — HEAD commit; null for uncommitted mode                                                                                                                                                        |
+| `.changedFiles`             | All changed files with status and +/- stats                                                                                                                                                                           |
+| `.manifest`                 | Per-file shape metrics (bytes, lines, maxLineLen, binary) — stats changed files, filling lazy index sizes; reconciles changed files missing from the gitignore-filtered index (tracked-but-ignored) via `index.add()` |
+| `.diffs`                    | Per-file unified diffs (3-line context) for reviewable files                                                                                                                                                          |
+| `.instructions`             | Discovered instruction files (CLAUDE.md, AGENTS.md) from directory chains                                                                                                                                             |
+| `.findings`                 | `FindingsStorage` instance                                                                                                                                                                                            |
+| `.grounding`                | `GroundingStorage` instance                                                                                                                                                                                           |
+| `.advance(to)`              | Transition to the given phase — throws `SessionError` if invalid                                                                                                                                                      |
+| `SessionPhase`              | `"GROUNDING" \| "SURFACING" \| "PROVING" \| "FILING" \| "COMPLETE"`                                                                                                                                                   |
+| `ReviewMode`                | `"committed" \| "uncommitted" \| "all"`                                                                                                                                                                               |
+| `FileDiff`                  | `{ path, content }`                                                                                                                                                                                                   |
+| `ManifestEntry`             | `{ path, bytes, lines, maxLineLen, binary }`                                                                                                                                                                          |
+| `SessionError`              | Error class for session failures                                                                                                                                                                                      |
 
 ### Phase state machine
 
@@ -146,6 +146,8 @@ Resolved at `Session.start()` in parallel with diff fetching. Delivered as block
 ## Dependencies
 
 - `node:crypto` (Session ID generation)
+- `node:fs/promises` (manifest stat)
 - `../repofs/repofs.ts` (RepoFs)
 - `../repofs/git/git.ts` (GitFileStat, GitLogEntry)
+- `../repofs/pathindex/pathindex.ts` (countFileLines)
 - `./instructions.ts` (resolveInstructions)
