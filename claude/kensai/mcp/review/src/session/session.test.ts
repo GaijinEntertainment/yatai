@@ -176,6 +176,14 @@ describe("Session", () => {
 			expect(hello!.binary).toBe(false);
 		});
 
+		it("manifest stat fills lazy index sizes", async () => {
+			const session = await Session.start(repoDir, "committed");
+			const hello = session.manifest.find((m) => m.path === "hello.txt");
+			const entry = session.rfs.index.get("hello.txt");
+			expect(entry?.type).toBe("file");
+			expect((entry as { size: number | null }).size).toBe(hello!.bytes);
+		});
+
 		it("creates fresh storages", async () => {
 			const session = await Session.start(repoDir, "committed");
 			expect(session.findings.list()).toHaveLength(0);
@@ -358,5 +366,40 @@ describe("Session", () => {
 			const s2 = await Session.start(repoDir, "committed");
 			expect(s1.id).not.toBe(s2.id);
 		});
+	});
+});
+
+describe("manifest reconciliation", () => {
+	let repoDir: string;
+
+	beforeAll(async () => {
+		repoDir = await initTestRepo();
+
+		await writeFile(join(repoDir, "app.log"), "v1\n");
+		await writeFile(join(repoDir, "main.ts"), "const x = 1;\n");
+		await git(repoDir, "add", ".");
+		await git(repoDir, "commit", "-m", "c1");
+
+		await writeFile(join(repoDir, ".gitignore"), "*.log\n");
+		await writeFile(join(repoDir, "app.log"), "v1\nv2\n");
+		await git(repoDir, "add", "app.log", ".gitignore");
+		await git(repoDir, "commit", "-m", "c2");
+	});
+
+	afterAll(async () => {
+		await rm(repoDir, { recursive: true, force: true, maxRetries: 3 });
+	});
+
+	it("changed tracked-but-ignored file gets a manifest entry and becomes visible in the index", async () => {
+		const session = await Session.start(repoDir, "committed");
+
+		expect(session.changedFiles.map((f) => f.path)).toContain("app.log");
+
+		const entry = session.manifest.find((m) => m.path === "app.log");
+		expect(entry).toBeDefined();
+		expect(entry!.bytes).toBeGreaterThan(0);
+		expect(entry!.lines).toBe(2);
+
+		expect(session.rfs.fileExists("app.log")).toBe(true);
 	});
 });
